@@ -1,0 +1,40 @@
+import { Navigate, Route, Routes } from "react-router-dom";
+
+import ProtectedRoute from "./components/common/ProtectedRoute.jsx";
+import Login from "./pages/auth/Login.jsx";
+import Dashboard from "./pages/admin/Dashboard.jsx";
+import DriverView from "./pages/driver/DriverView.jsx";
+import { ROLES } from "./utils/constants.js";
+
+/**
+ * Top-level routing. Admins land on the dashboard, drivers on their
+ * route view. Both areas are guarded by ProtectedRoute (Phase 1 wires
+ * auth; the inner screens are fleshed out in later phases).
+ */
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+
+      <Route
+        path="/admin/*"
+        element={
+          <ProtectedRoute role={ROLES.ADMIN}>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/driver/*"
+        element={
+          <ProtectedRoute role={ROLES.DRIVER}>
+            <DriverView />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+}

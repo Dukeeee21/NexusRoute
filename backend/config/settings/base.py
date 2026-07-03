@@ -120,6 +120,22 @@ MEDIA_ROOT = BASE_DIR / "mediafiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# ── Cache (Redis) ─────────────────────────────────────────────────
+# Used by the route optimizer. IGNORE_EXCEPTIONS lets the app degrade
+# gracefully (compute without caching) when Redis is unavailable, e.g.
+# during local test runs.
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": env("REDIS_URL", default="redis://localhost:6379/0"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,
+        },
+    },
+}
+DJANGO_REDIS_IGNORE_EXCEPTIONS = True
+
 # ── Django REST Framework ─────────────────────────────────────────
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (

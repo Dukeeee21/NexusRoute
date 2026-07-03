@@ -17,10 +17,8 @@ from .serializers import OptimizeRequestSerializer, OptimizeResponseSerializer
 CACHE_TTL_SECONDS = 60 * 60  # 1 hour
 
 
-def _cache_key(points, avg_speed) -> str:
-    payload = json.dumps(
-        {"points": points, "speed": avg_speed}, sort_keys=True
-    ).encode()
+def _cache_key(points) -> str:
+    payload = json.dumps({"points": points}, sort_keys=True).encode()
     digest = hashlib.sha1(payload).hexdigest()
     return f"route:optimize:{digest}"
 
@@ -54,38 +52,41 @@ class OptimizeRouteView(APIView):
         ordered_points = [origin, *stops]
         coords = [(p["lat"], p["lng"]) for p in ordered_points]
 
-        key = _cache_key(coords, avg_speed)
-        cached = cache.get(key)
-        if cached is not None:
-            cached["cached"] = True
-            return Response(cached)
+        # The geometry (order + distances) depends only on the coordinates,
+        # so that is what we cache. Labels come from the current request and
+        # are applied on every response, cached or not.
+        key = _cache_key(coords)
+        geometry = cache.get(key)
+        was_cached = geometry is not None
 
-        try:
-            result = optimize_route(coords, start_index=0)
-        except TooManyStopsError as exc:
-            return Response(
-                {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        ordered = [ordered_points[i] for i in result.order]
-        legs = [
-            {
-                "from_index": leg.from_index,
-                "to_index": leg.to_index,
-                "distance_km": round(leg.distance_km, 4),
+        if not was_cached:
+            try:
+                result = optimize_route(coords, start_index=0)
+            except TooManyStopsError as exc:
+                return Response(
+                    {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
+                )
+            geometry = {
+                "order_indices": result.order,
+                "legs": [
+                    {
+                        "from_index": leg.from_index,
+                        "to_index": leg.to_index,
+                        "distance_km": round(leg.distance_km, 4),
+                    }
+                    for leg in result.legs
+                ],
+                "total_distance_km": result.total_distance_km,
             }
-            for leg in result.legs
-        ]
-        estimated_time_min = round(result.total_distance_km / avg_speed * 60, 2)
+            cache.set(key, geometry, CACHE_TTL_SECONDS)
 
+        total_km = geometry["total_distance_km"]
         payload = {
-            "order": ordered,
-            "legs": legs,
-            "total_distance_km": result.total_distance_km,
-            "estimated_time_min": estimated_time_min,
+            "order": [ordered_points[i] for i in geometry["order_indices"]],
+            "legs": geometry["legs"],
+            "total_distance_km": total_km,
+            "estimated_time_min": round(total_km / avg_speed * 60, 2),
             "stops_count": len(stops),
-            "cached": False,
+            "cached": was_cached,
         }
-
-        cache.set(key, payload, CACHE_TTL_SECONDS)
         return Response(payload)

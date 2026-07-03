@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import Sidebar from "../../components/common/Sidebar.jsx";
 import DeliveryStatusBadge from "../../components/deliveries/DeliveryStatusBadge.jsx";
 import {
@@ -10,27 +12,27 @@ import {
   IconUser,
 } from "../../components/common/icons.jsx";
 import { useAuth } from "../../hooks/useAuth.js";
-import { DELIVERY_STATUS } from "../../utils/constants.js";
+import { useDeliveries } from "../../hooks/useDeliveries.js";
+import { formatTime } from "../../utils/formatters.js";
 
-// Mock data mirroring the Stitch design. Real data arrives in Phase 4
-// (metrics from the reports API, table from the deliveries API).
-const METRICS = [
-  { label: "Entregas totales", value: "1,284", hint: "+12% esta semana", hintColor: "text-status-delivered", Icon: IconBox },
-  { label: "En tránsito", value: "45", hint: "Activas", hintColor: "text-status-transit", Icon: IconTruck },
-  { label: "Entregadas", value: "1,120", hint: "98% éxito", hintColor: "text-status-delivered", Icon: IconCheck },
-  { label: "Conductores activos", value: "32", hint: "32/40 turnos cubiertos", hintColor: "text-slate-400", Icon: IconUser },
-];
-
-const RECENT = [
-  { id: "#NX-8801", client: "TechCorp Ltda.", dest: "Zona Norte, Centro Logístico A", status: DELIVERY_STATUS.IN_TRANSIT, time: "10:45 AM" },
-  { id: "#NX-8802", client: "Distribuidora SUR", dest: "Almacén 4, Parque Industrial Sur", status: DELIVERY_STATUS.PENDING, time: "10:30 AM" },
-  { id: "#NX-8803", client: "MegaRetail S.A.", dest: "Tienda Central, Av. Principal 123", status: DELIVERY_STATUS.DELIVERED, time: "09:15 AM" },
-  { id: "#NX-8804", client: "Hospital General", dest: "Sector Suministros Médicos", status: DELIVERY_STATUS.DELIVERED, time: "08:42 AM" },
-];
+// Metric cards. "Entregas totales" is live (from the API count); the rest
+// become live in Phase 6 (reports module).
+function buildMetrics(total) {
+  return [
+    { label: "Entregas totales", value: String(total), hint: "En el sistema", hintColor: "text-status-delivered", Icon: IconBox },
+    { label: "En tránsito", value: "45", hint: "Activas", hintColor: "text-status-transit", Icon: IconTruck },
+    { label: "Entregadas", value: "1,120", hint: "98% éxito", hintColor: "text-status-delivered", Icon: IconCheck },
+    { label: "Conductores activos", value: "32", hint: "32/40 turnos cubiertos", hintColor: "text-slate-400", Icon: IconUser },
+  ];
+}
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
+  const { deliveries, count, loading, error } = useDeliveries();
   const displayName = user?.first_name || user?.username || "Admin";
+
+  const recent = deliveries.slice(0, 5);
+  const metrics = buildMetrics(count);
 
   return (
     <div className="flex min-h-screen bg-nexus-navy text-slate-200">
@@ -71,7 +73,7 @@ export default function Dashboard() {
 
           {/* Metrics */}
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {METRICS.map(({ label, value, hint, hintColor, Icon }) => (
+            {metrics.map(({ label, value, hint, hintColor, Icon }) => (
               <div
                 key={label}
                 className="rounded-xl border border-nexus-border bg-nexus-surface p-5"
@@ -92,9 +94,12 @@ export default function Dashboard() {
           <div className="mt-8 rounded-xl border border-nexus-border bg-nexus-surface">
             <div className="flex items-center justify-between px-5 py-4">
               <h2 className="text-base font-semibold text-white">Entregas Recientes</h2>
-              <button className="text-xs font-medium text-nexus-primary hover:underline">
+              <Link
+                to="/admin/deliveries"
+                className="text-xs font-medium text-nexus-primary hover:underline"
+              >
                 Ver todas
-              </button>
+              </Link>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -108,20 +113,51 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {RECENT.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="border-b border-nexus-border/60 last:border-0 hover:bg-nexus-surface2/50"
-                    >
-                      <td className="px-5 py-3 font-mono text-xs text-slate-400">{row.id}</td>
-                      <td className="px-5 py-3 font-medium text-white">{row.client}</td>
-                      <td className="px-5 py-3 text-slate-400">{row.dest}</td>
-                      <td className="px-5 py-3">
-                        <DeliveryStatusBadge status={row.status} />
+                  {loading && (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                        Cargando entregas...
                       </td>
-                      <td className="px-5 py-3 text-slate-400">{row.time}</td>
                     </tr>
-                  ))}
+                  )}
+                  {!loading && error && (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-8 text-center text-red-400">
+                        No se pudieron cargar las entregas.
+                      </td>
+                    </tr>
+                  )}
+                  {!loading && !error && recent.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-8 text-center text-slate-500">
+                        Aún no hay entregas registradas.
+                      </td>
+                    </tr>
+                  )}
+                  {!loading &&
+                    !error &&
+                    recent.map((d) => (
+                      <tr
+                        key={d.id}
+                        className="border-b border-nexus-border/60 last:border-0 hover:bg-nexus-surface2/50"
+                      >
+                        <td className="px-5 py-3 font-mono text-xs text-slate-400">
+                          {d.package?.tracking_code}
+                        </td>
+                        <td className="px-5 py-3 font-medium text-white">
+                          {d.package?.client_name}
+                        </td>
+                        <td className="px-5 py-3 text-slate-400">
+                          {d.package?.destination_address}
+                        </td>
+                        <td className="px-5 py-3">
+                          <DeliveryStatusBadge status={d.status} />
+                        </td>
+                        <td className="px-5 py-3 text-slate-400">
+                          {formatTime(d.created_at)}
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>

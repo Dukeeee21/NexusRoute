@@ -91,3 +91,77 @@ def test_status_action_invalid_transition(admin_client):
     url = reverse("delivery-status", args=[delivery.id])
     resp = admin_client.patch(url, {"status": "DELIVERED"}, format="json")
     assert resp.status_code == 400  # can't jump PENDING -> DELIVERED
+
+
+# ── Phase 5: driver-driven status updates ───────────────────────────
+
+
+def _assigned_delivery(driver):
+    package = Package.objects.create(
+        client_name="X", origin_address="A", origin_lat=0, origin_lng=0,
+        destination_address="B", destination_lat=1, destination_lng=1,
+    )
+    return Delivery.objects.create(package=package, driver=driver)
+
+
+@pytest.mark.django_db
+def test_assigned_driver_can_update_own_delivery_status(driver_user):
+    delivery = _assigned_delivery(driver_user)
+    client = APIClient()
+    client.force_authenticate(user=driver_user)
+    resp = client.patch(
+        reverse("delivery-status", args=[delivery.id]), {"status": "IN_TRANSIT"}, format="json"
+    )
+    assert resp.status_code == 200
+    delivery.refresh_from_db()
+    assert delivery.status == Delivery.Status.IN_TRANSIT
+
+
+@pytest.mark.django_db
+def test_driver_cannot_update_another_drivers_delivery(driver_user):
+    other_driver = User.objects.create_user(
+        username="otro", password="pass12345", role=User.Role.DRIVER
+    )
+    delivery = _assigned_delivery(other_driver)
+    client = APIClient()
+    client.force_authenticate(user=driver_user)
+    resp = client.patch(
+        reverse("delivery-status", args=[delivery.id]), {"status": "IN_TRANSIT"}, format="json"
+    )
+    # Filtered out of the driver's own queryset entirely -> not found,
+    # rather than leaking that the delivery exists via a 403.
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_driver_full_pipeline_transition(driver_user):
+    delivery = _assigned_delivery(driver_user)
+    client = APIClient()
+    client.force_authenticate(user=driver_user)
+    url = reverse("delivery-status", args=[delivery.id])
+
+    resp = client.patch(url, {"status": "IN_TRANSIT"}, format="json")
+    assert resp.status_code == 200
+
+    resp = client.patch(url, {"status": "DELIVERED"}, format="json")
+    assert resp.status_code == 200
+    delivery.refresh_from_db()
+    assert delivery.status == Delivery.Status.DELIVERED
+    assert delivery.delivered_at is not None
+
+
+@pytest.mark.django_db
+def test_driver_list_only_shows_own_deliveries(driver_user):
+    other_driver = User.objects.create_user(
+        username="otro2", password="pass12345", role=User.Role.DRIVER
+    )
+    _assigned_delivery(driver_user)
+    _assigned_delivery(other_driver)
+
+    client = APIClient()
+    client.force_authenticate(user=driver_user)
+    resp = client.get(reverse("delivery-list"))
+    assert resp.status_code == 200
+    results = resp.data["results"] if "results" in resp.data else resp.data
+    assert len(results) == 1
+    assert results[0]["driver"] == driver_user.id

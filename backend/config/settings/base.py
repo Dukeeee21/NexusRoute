@@ -136,6 +136,13 @@ CACHES = {
 }
 DJANGO_REDIS_IGNORE_EXCEPTIONS = True
 
+# ── Fleet defaults ────────────────────────────────────────────────
+# Default route origin (depot) used when creating a Route without an
+# explicit origin. Defaults to Buenos Aires; override per deployment.
+DEPOT_LAT = env.float("DEPOT_LAT", default=-34.6037)
+DEPOT_LNG = env.float("DEPOT_LNG", default=-58.3816)
+DEPOT_LABEL = env("DEPOT_LABEL", default="Depósito Central")
+
 # ── Django REST Framework ─────────────────────────────────────────
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (

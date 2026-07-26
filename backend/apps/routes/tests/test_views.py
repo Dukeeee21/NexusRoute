@@ -1,8 +1,12 @@
-"""Tests for the route optimization endpoint."""
+"""Tests for the route optimization endpoint and route assignment."""
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
+
+from apps.deliveries.models import Delivery, Package
+from apps.routes.models import Route
+from apps.vehicles.models import Vehicle
 
 User = get_user_model()
 
@@ -13,6 +17,29 @@ def auth_client(db):
     client = APIClient()
     client.force_authenticate(user=user)
     return client
+
+
+@pytest.fixture
+def driver(db):
+    return User.objects.create_user(username="conductor", password="pass12345", role=User.Role.DRIVER)
+
+
+@pytest.fixture
+def vehicle(db):
+    return Vehicle.objects.create(plate="ABC-123", capacity_kg=500)
+
+
+def _make_pending_delivery(client_name, dest_lat, dest_lng):
+    package = Package.objects.create(
+        client_name=client_name,
+        origin_address="Depósito",
+        origin_lat=-34.60,
+        origin_lng=-58.38,
+        destination_address=f"Destino {client_name}",
+        destination_lat=dest_lat,
+        destination_lng=dest_lng,
+    )
+    return Delivery.objects.create(package=package)
 
 
 def _body():
@@ -57,3 +84,85 @@ def test_optimize_rejects_invalid_coordinates(auth_client):
     body = {"origin": {"lat": 200, "lng": -58.4}, "stops": [{"lat": -34.5, "lng": -58.4}]}
     resp = auth_client.post(reverse("route-optimize"), body, format="json")
     assert resp.status_code == 400
+
+
+# ── Route assignment (persisted plans) ──────────────────────────────
+
+
+@pytest.mark.django_db
+def test_admin_creates_route_assigns_deliveries(auth_client, driver, vehicle):
+    d1 = _make_pending_delivery("A", -34.55, -58.45)
+    d2 = _make_pending_delivery("B", -34.62, -58.40)
+
+    resp = auth_client.post(
+        reverse("route-list"),
+        {"driver": driver.id, "vehicle": vehicle.id, "delivery_ids": [d1.id, d2.id]},
+        format="json",
+    )
+    assert resp.status_code == 201
+    assert Route.objects.count() == 1
+    assert resp.data["driver"] == driver.id
+    assert len(resp.data["stops"]) == 2
+    assert resp.data["total_distance_km"] > 0
+
+    d1.refresh_from_db()
+    d2.refresh_from_db()
+    assert d1.driver_id == driver.id
+    assert d2.driver_id == driver.id
+    assert d1.vehicle_id == vehicle.id
+
+
+@pytest.mark.django_db
+def test_driver_cannot_create_route(driver, vehicle):
+    d1 = _make_pending_delivery("A", -34.55, -58.45)
+    client = APIClient()
+    client.force_authenticate(user=driver)
+    resp = client.post(
+        reverse("route-list"),
+        {"driver": driver.id, "vehicle": vehicle.id, "delivery_ids": [d1.id]},
+        format="json",
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_cannot_reassign_delivery_already_on_a_route(auth_client, driver, vehicle):
+    d1 = _make_pending_delivery("A", -34.55, -58.45)
+    auth_client.post(
+        reverse("route-list"),
+        {"driver": driver.id, "vehicle": vehicle.id, "delivery_ids": [d1.id]},
+        format="json",
+    )
+    resp = auth_client.post(
+        reverse("route-list"),
+        {"driver": driver.id, "vehicle": vehicle.id, "delivery_ids": [d1.id]},
+        format="json",
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+def test_driver_sees_only_own_routes(auth_client, driver, vehicle):
+    other_driver = User.objects.create_user(
+        username="otro", password="pass12345", role=User.Role.DRIVER
+    )
+    d1 = _make_pending_delivery("A", -34.55, -58.45)
+    d2 = _make_pending_delivery("B", -34.62, -58.40)
+    auth_client.post(
+        reverse("route-list"),
+        {"driver": driver.id, "vehicle": vehicle.id, "delivery_ids": [d1.id]},
+        format="json",
+    )
+    auth_client.post(
+        reverse("route-list"),
+        {"driver": other_driver.id, "vehicle": vehicle.id, "delivery_ids": [d2.id]},
+        format="json",
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=driver)
+    resp = client.get(reverse("route-list"))
+    assert resp.status_code == 200
+    results = resp.data["results"] if "results" in resp.data else resp.data
+    assert len(results) == 1
+    assert results[0]["driver"] == driver.id

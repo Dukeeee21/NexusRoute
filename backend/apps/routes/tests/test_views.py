@@ -1,6 +1,7 @@
 """Tests for the route optimization endpoint and route assignment."""
 
 import pytest
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -74,6 +75,23 @@ def test_optimize_returns_ordered_route(auth_client):
     assert len(data["legs"]) == 3
     assert data["total_distance_km"] > 0
     assert data["estimated_time_min"] > 0
+
+
+@pytest.mark.django_db
+def test_depot_requires_authentication():
+    resp = APIClient().get(reverse("route-depot"))
+    assert resp.status_code == 401
+
+
+@pytest.mark.django_db
+def test_depot_returns_configured_location(auth_client):
+    resp = auth_client.get(reverse("route-depot"))
+    assert resp.status_code == 200
+    assert resp.data == {
+        "label": settings.DEPOT_LABEL,
+        "lat": settings.DEPOT_LAT,
+        "lng": settings.DEPOT_LNG,
+    }
 
 
 @pytest.mark.django_db

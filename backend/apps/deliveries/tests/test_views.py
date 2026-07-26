@@ -1,4 +1,5 @@
 """Tests for the deliveries API."""
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -51,12 +52,59 @@ def test_admin_creates_delivery_with_nested_package(admin_client):
 
 
 @pytest.mark.django_db
+def test_admin_updates_delivery_with_nested_package_edit(admin_client):
+    resp = admin_client.post(
+        reverse("delivery-list"), {"package": _package_payload()}, format="json"
+    )
+    delivery_id = resp.data["id"]
+
+    updated_package = _package_payload()
+    updated_package["client_name"] = "Nuevo Nombre Cliente"
+    resp2 = admin_client.patch(
+        reverse("delivery-detail", args=[delivery_id]),
+        {"package": updated_package},
+        format="json",
+    )
+    assert resp2.status_code == 200
+    assert resp2.data["package"]["client_name"] == "Nuevo Nombre Cliente"
+    # tracking_code is server-generated and must not change on edit.
+    assert resp2.data["package"]["tracking_code"] == resp.data["package"]["tracking_code"]
+
+
+@pytest.mark.django_db
+def test_admin_can_assign_valid_driver_to_delivery(admin_client, driver_user):
+    resp = admin_client.post(
+        reverse("delivery-list"), {"package": _package_payload()}, format="json"
+    )
+    delivery_id = resp.data["id"]
+    resp2 = admin_client.patch(
+        reverse("delivery-detail", args=[delivery_id]),
+        {"driver": driver_user.id},
+        format="json",
+    )
+    assert resp2.status_code == 200
+    assert resp2.data["driver_name"] == driver_user.username
+
+
+@pytest.mark.django_db
+def test_cannot_assign_non_driver_to_delivery(admin_client, admin_user):
+    resp = admin_client.post(
+        reverse("delivery-list"), {"package": _package_payload()}, format="json"
+    )
+    delivery_id = resp.data["id"]
+    resp2 = admin_client.patch(
+        reverse("delivery-detail", args=[delivery_id]),
+        {"driver": admin_user.id},
+        format="json",
+    )
+    assert resp2.status_code == 400
+
+
+@pytest.mark.django_db
 def test_driver_cannot_create_delivery(driver_user):
     client = APIClient()
     client.force_authenticate(user=driver_user)
-    resp = client.post(
-        reverse("delivery-list"), {"package": _package_payload()}, format="json"
-    )
+    resp = client.post(reverse("delivery-list"), {"package": _package_payload()}, format="json")
     assert resp.status_code == 403
 
 
@@ -70,8 +118,13 @@ def test_list_requires_authentication():
 @pytest.mark.django_db
 def test_status_action_valid_transition(admin_client, admin_user):
     package = Package.objects.create(
-        client_name="X", origin_address="A", origin_lat=0, origin_lng=0,
-        destination_address="B", destination_lat=1, destination_lng=1,
+        client_name="X",
+        origin_address="A",
+        origin_lat=0,
+        origin_lng=0,
+        destination_address="B",
+        destination_lat=1,
+        destination_lng=1,
     )
     delivery = Delivery.objects.create(package=package)
     url = reverse("delivery-status", args=[delivery.id])
@@ -84,8 +137,13 @@ def test_status_action_valid_transition(admin_client, admin_user):
 @pytest.mark.django_db
 def test_status_action_invalid_transition(admin_client):
     package = Package.objects.create(
-        client_name="X", origin_address="A", origin_lat=0, origin_lng=0,
-        destination_address="B", destination_lat=1, destination_lng=1,
+        client_name="X",
+        origin_address="A",
+        origin_lat=0,
+        origin_lng=0,
+        destination_address="B",
+        destination_lat=1,
+        destination_lng=1,
     )
     delivery = Delivery.objects.create(package=package)  # PENDING
     url = reverse("delivery-status", args=[delivery.id])
@@ -98,8 +156,13 @@ def test_status_action_invalid_transition(admin_client):
 
 def _assigned_delivery(driver):
     package = Package.objects.create(
-        client_name="X", origin_address="A", origin_lat=0, origin_lng=0,
-        destination_address="B", destination_lat=1, destination_lng=1,
+        client_name="X",
+        origin_address="A",
+        origin_lat=0,
+        origin_lng=0,
+        destination_address="B",
+        destination_lat=1,
+        destination_lng=1,
     )
     return Delivery.objects.create(package=package, driver=driver)
 

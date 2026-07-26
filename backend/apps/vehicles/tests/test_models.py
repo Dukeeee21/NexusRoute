@@ -1,4 +1,5 @@
 """Tests for the Vehicle model and its API."""
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -46,6 +47,20 @@ def test_driver_cannot_create_vehicle(driver_user):
         reverse("vehicle-list"), {"plate": "NO-001", "capacity_kg": 100}, format="json"
     )
     assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_admin_can_assign_driver_to_vehicle(admin_user, driver_user):
+    client = APIClient()
+    client.force_authenticate(user=admin_user)
+    resp = client.post(
+        reverse("vehicle-list"),
+        {"plate": "DRV-001", "capacity_kg": 300, "driver": driver_user.id},
+        format="json",
+    )
+    assert resp.status_code == 201
+    assert resp.data["driver"] == driver_user.id
+    assert resp.data["driver_name"] == driver_user.username
 
 
 @pytest.mark.django_db

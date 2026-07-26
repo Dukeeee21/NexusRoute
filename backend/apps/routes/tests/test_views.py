@@ -1,11 +1,13 @@
 """Tests for the route optimization endpoint and route assignment."""
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.deliveries.models import Delivery, Package
-from apps.routes.models import Route
+from apps.routes.algorithms.astar import MAX_STOPS
+from apps.routes.models import Route, RouteStop
 from apps.vehicles.models import Vehicle
 
 User = get_user_model()
@@ -21,7 +23,9 @@ def auth_client(db):
 
 @pytest.fixture
 def driver(db):
-    return User.objects.create_user(username="conductor", password="pass12345", role=User.Role.DRIVER)
+    return User.objects.create_user(
+        username="conductor", password="pass12345", role=User.Role.DRIVER
+    )
 
 
 @pytest.fixture
@@ -86,7 +90,42 @@ def test_optimize_rejects_invalid_coordinates(auth_client):
     assert resp.status_code == 400
 
 
+@pytest.mark.django_db
+def test_optimize_rejects_too_many_stops(auth_client):
+    body = {
+        "origin": {"lat": -34.6, "lng": -58.4},
+        "stops": [{"lat": -34.6 + i * 0.01, "lng": -58.4} for i in range(MAX_STOPS + 1)],
+    }
+    resp = auth_client.post(reverse("route-optimize"), body, format="json")
+    assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+def test_optimize_caches_identical_requests(auth_client):
+    body = _body()
+    first = auth_client.post(reverse("route-optimize"), body, format="json")
+    assert first.status_code == 200
+    assert first.data["cached"] is False
+
+    second = auth_client.post(reverse("route-optimize"), body, format="json")
+    assert second.status_code == 200
+    assert second.data["cached"] is True
+    assert second.data["total_distance_km"] == first.data["total_distance_km"]
+
+
 # ── Route assignment (persisted plans) ──────────────────────────────
+
+
+def test_route_str():
+    route = Route(id=1, origin_label="Depósito")
+    assert "Ruta #1" in str(route)
+
+
+def test_route_stop_str():
+    delivery = Delivery(package=Package(tracking_code="NX-TEST"))
+    stop = RouteStop(order=2, delivery=delivery)
+    assert "Parada 2" in str(stop)
+    assert "NX-TEST" in str(stop)
 
 
 @pytest.mark.django_db
@@ -166,3 +205,38 @@ def test_driver_sees_only_own_routes(auth_client, driver, vehicle):
     results = resp.data["results"] if "results" in resp.data else resp.data
     assert len(results) == 1
     assert results[0]["driver"] == driver.id
+
+
+@pytest.mark.django_db
+def test_route_rejects_duplicate_delivery_ids(auth_client, driver, vehicle):
+    d1 = _make_pending_delivery("A", -34.55, -58.45)
+    resp = auth_client.post(
+        reverse("route-list"),
+        {"driver": driver.id, "vehicle": vehicle.id, "delivery_ids": [d1.id, d1.id]},
+        format="json",
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+def test_route_rejects_nonexistent_delivery_id(auth_client, driver, vehicle):
+    resp = auth_client.post(
+        reverse("route-list"),
+        {"driver": driver.id, "vehicle": vehicle.id, "delivery_ids": [999999]},
+        format="json",
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+def test_route_rejects_too_many_stops(auth_client, driver, vehicle):
+    ids = [
+        _make_pending_delivery(f"C{i}", -34.6 + i * 0.01, -58.4).id for i in range(MAX_STOPS + 1)
+    ]
+    resp = auth_client.post(
+        reverse("route-list"),
+        {"driver": driver.id, "vehicle": vehicle.id, "delivery_ids": ids},
+        format="json",
+    )
+    assert resp.status_code == 400
+    assert "delivery_ids" in resp.data

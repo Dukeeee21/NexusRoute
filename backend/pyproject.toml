@@ -1,0 +1,9 @@
+[tool.black]
+# Match the flake8/isort line-length already configured in setup.cfg.
+# (Coverage config intentionally stays only in setup.cfg's
+# [coverage:run] — coverage.py reads configs in a fixed precedence
+# order, and duplicating it here risks one silently shadowing the
+# other.)
+line-length = 100
+target-version = ["py312"]
+extend-exclude = "migrations"

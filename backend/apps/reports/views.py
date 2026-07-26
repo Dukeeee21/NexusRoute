@@ -5,6 +5,7 @@ Every endpoint here is admin-only (IsAdmin) and read-only — this module
 is intentionally excluded from the driver's app (see roadmap design
 note: reports live only in the main NexusRoute Dashboard).
 """
+
 import csv
 from datetime import timedelta
 
@@ -43,10 +44,7 @@ class PerformanceSummaryView(APIView):
         completion_rate = round(delivered / total * 100, 1) if total else 0.0
 
         active_drivers = (
-            Delivery.objects.filter(driver__isnull=False)
-            .values("driver")
-            .distinct()
-            .count()
+            Delivery.objects.filter(driver__isnull=False).values("driver").distinct().count()
         )
 
         avg_duration = (
@@ -58,9 +56,7 @@ class PerformanceSummaryView(APIView):
             round(avg_duration.total_seconds() / 60, 1) if avg_duration else None
         )
 
-        total_distance_km = (
-            Route.objects.aggregate(total=Sum("total_distance_km"))["total"] or 0.0
-        )
+        total_distance_km = Route.objects.aggregate(total=Sum("total_distance_km"))["total"] or 0.0
 
         data = {
             "total_deliveries": total,
@@ -90,9 +86,9 @@ class DriverPerformanceView(APIView):
                 driver=driver, status=Delivery.Status.DELIVERED
             ).count()
             distance = (
-                Route.objects.filter(driver=driver).aggregate(
-                    total=Sum("total_distance_km")
-                )["total"]
+                Route.objects.filter(driver=driver).aggregate(total=Sum("total_distance_km"))[
+                    "total"
+                ]
                 or 0.0
             )
             results.append(
@@ -151,12 +147,18 @@ class ExportDeliveriesCSVView(APIView):
 
         writer = csv.writer(response)
         writer.writerow(
-            ["codigo", "cliente", "destino", "estado", "conductor", "vehiculo", "creada", "entregada"]
+            [
+                "codigo",
+                "cliente",
+                "destino",
+                "estado",
+                "conductor",
+                "vehiculo",
+                "creada",
+                "entregada",
+            ]
         )
-        qs = (
-            Delivery.objects.select_related("package", "driver", "vehicle")
-            .order_by("-created_at")
-        )
+        qs = Delivery.objects.select_related("package", "driver", "vehicle").order_by("-created_at")
         for d in qs:
             writer.writerow(
                 [

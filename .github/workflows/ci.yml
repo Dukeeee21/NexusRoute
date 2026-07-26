@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend:
+    name: Backend (tests + lint)
+    runs-on: ubuntu-latest
+
+    # Real Postgres/Redis services, not mocks — the same stack the app
+    # runs against via docker-compose, so CI catches what local sqlite
+    # runs might miss (e.g. Postgres-specific query behavior).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nexusroute
+          POSTGRES_USER: nexus
+          POSTGRES_PASSWORD: nexus
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nexus -d nexusroute"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DJANGO_SECRET_KEY: ci-secret-key-not-for-production
+      DATABASE_URL: postgres://nexus:nexus@localhost:5432/nexusroute
+      REDIS_URL: redis://localhost:6379/0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements/dev.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/dev.txt
+
+      - name: Check for missing migrations
+        working-directory: backend
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run tests (pytest + coverage)
+        working-directory: backend
+        run: pytest
+
+      - name: Lint (flake8 — style + max cyclomatic complexity 10)
+        working-directory: backend
+        run: flake8 apps config conftest.py
+
+      - name: Import order (isort)
+        working-directory: backend
+        run: isort --check apps config conftest.py
+
+      - name: Formatting (black)
+        working-directory: backend
+        run: black --check apps config conftest.py
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: backend/coverage.xml
+
+      # Runs only if a SONAR_TOKEN secret is configured on the repo —
+      # this project doesn't have a SonarQube/SonarCloud server
+      # provisioned (see docs/CALIDAD_ISO25010.md), so this step is
+      # wired up and ready but intentionally skips rather than failing
+      # or faking a result when the secret is absent.
+      - name: SonarCloud scan
+        if: ${{ env.SONAR_TOKEN != '' }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        uses: SonarSource/sonarqube-scan-action@v4
+        with:
+          projectBaseDir: backend
+
+  frontend:
+    name: Frontend (build)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build (catches syntax/import errors across the app)
+        working-directory: frontend
+        run: npm run build

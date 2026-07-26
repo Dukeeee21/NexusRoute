@@ -1,5 +1,7 @@
 """Tests for the route optimization endpoint and route assignment."""
 
+from unittest.mock import patch
+
 import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -8,10 +10,23 @@ from rest_framework.test import APIClient
 
 from apps.deliveries.models import Delivery, Package
 from apps.routes.algorithms.astar import MAX_STOPS
-from apps.routes.models import Route, RouteStop
+from apps.routes.models import Route, RouteStop, RoutingSource
 from apps.vehicles.models import Vehicle
 
 User = get_user_model()
+
+
+@pytest.fixture(autouse=True)
+def _no_real_osrm_calls():
+    """
+    These tests exercise the API/serializer layer, not OSRM itself
+    (see test_osrm.py and test_services.py for that) — force the
+    haversine fallback here so the existing suite stays deterministic
+    and doesn't depend on a third-party network call. Tests that
+    specifically want the OSRM-success path re-patch this themselves.
+    """
+    with patch("apps.routes.services.osrm.fetch_distance_duration_matrix", return_value=None):
+        yield
 
 
 @pytest.fixture
@@ -75,6 +90,37 @@ def test_optimize_returns_ordered_route(auth_client):
     assert len(data["legs"]) == 3
     assert data["total_distance_km"] > 0
     assert data["estimated_time_min"] > 0
+    # OSRM is mocked as unavailable for this whole test module (see
+    # the autouse fixture above), so every request here should fall
+    # back to the straight-line estimate and say so explicitly.
+    assert data["routing_source"] == RoutingSource.HAVERSINE
+    assert data["geometry"] is None
+
+
+@pytest.mark.django_db
+def test_optimize_uses_osrm_when_available(auth_client):
+    body = _body()
+    n = len(body["stops"]) + 1
+    matrix = [[0.0 if i == j else 4.0 for j in range(n)] for i in range(n)]
+    durations = [[0.0 if i == j else 6.0 for j in range(n)] for i in range(n)]
+    geometry = [(-34.60, -58.38), (-34.55, -58.45)]
+
+    with (
+        patch(
+            "apps.routes.services.osrm.fetch_distance_duration_matrix",
+            return_value=(matrix, durations),
+        ),
+        patch("apps.routes.services.osrm.fetch_route_geometry", return_value=geometry),
+    ):
+        resp = auth_client.post(reverse("route-optimize"), body, format="json")
+
+    assert resp.status_code == 200
+    assert resp.data["routing_source"] == RoutingSource.OSRM
+    # Compare as plain values — the cache round-trip (pickle) preserves
+    # tuples, but the point is the coordinates match, not the container.
+    assert [list(p) for p in resp.data["geometry"]] == [list(p) for p in geometry]
+    # 3 legs * 6 real minutes each, not the distance/avg_speed estimate.
+    assert resp.data["estimated_time_min"] == pytest.approx(18.0)
 
 
 @pytest.mark.django_db
@@ -161,12 +207,45 @@ def test_admin_creates_route_assigns_deliveries(auth_client, driver, vehicle):
     assert resp.data["driver"] == driver.id
     assert len(resp.data["stops"]) == 2
     assert resp.data["total_distance_km"] > 0
+    # OSRM mocked as unavailable for this module -> falls back cleanly.
+    assert resp.data["routing_source"] == RoutingSource.HAVERSINE
+    assert resp.data["geometry"] is None
 
     d1.refresh_from_db()
     d2.refresh_from_db()
     assert d1.driver_id == driver.id
     assert d2.driver_id == driver.id
     assert d1.vehicle_id == vehicle.id
+
+
+@pytest.mark.django_db
+def test_route_persists_osrm_geometry_when_available(auth_client, driver, vehicle):
+    d1 = _make_pending_delivery("A", -34.55, -58.45)
+    d2 = _make_pending_delivery("B", -34.62, -58.40)
+    matrix = [[0.0, 3.0, 4.0], [3.0, 0.0, 2.0], [4.0, 2.0, 0.0]]
+    durations = [[0.0, 5.0, 7.0], [5.0, 0.0, 3.0], [7.0, 3.0, 0.0]]
+    geometry = [(-34.60, -58.38), (-34.61, -58.39)]
+
+    with (
+        patch(
+            "apps.routes.services.osrm.fetch_distance_duration_matrix",
+            return_value=(matrix, durations),
+        ),
+        patch("apps.routes.services.osrm.fetch_route_geometry", return_value=geometry),
+    ):
+        resp = auth_client.post(
+            reverse("route-list"),
+            {"driver": driver.id, "vehicle": vehicle.id, "delivery_ids": [d1.id, d2.id]},
+            format="json",
+        )
+
+    assert resp.status_code == 201
+    assert resp.data["routing_source"] == RoutingSource.OSRM
+    assert [list(p) for p in resp.data["geometry"]] == [list(p) for p in geometry]
+
+    route = Route.objects.get(pk=resp.data["id"])
+    assert route.routing_source == RoutingSource.OSRM
+    assert route.geometry is not None
 
 
 @pytest.mark.django_db

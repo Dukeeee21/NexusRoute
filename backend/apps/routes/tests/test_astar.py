@@ -75,6 +75,32 @@ def test_empty_points_raises_value_error():
         optimize_route([])
 
 
+def test_optimize_route_honors_custom_distance_matrix():
+    # A tiny 3-point matrix where the "real" (custom) distances
+    # deliberately disagree with what haversine would say — point 1 is
+    # geographically close to the origin but the custom matrix marks
+    # it as expensive (e.g. a one-way street / river crossing), so the
+    # optimizer should prefer visiting point 2 first if that's cheaper
+    # under the SUPPLIED matrix, proving the matrix is actually used
+    # rather than silently falling back to haversine.
+    points = [(0.0, 0.0), (0.01, 0.0), (0.0, 0.01)]
+    matrix = [
+        [0.0, 100.0, 1.0],
+        [100.0, 0.0, 1.0],
+        [1.0, 1.0, 0.0],
+    ]
+    result = optimize_route(points, start_index=0, distance_matrix=matrix)
+    assert result.order == [0, 2, 1]
+    assert result.total_distance_km == pytest.approx(2.0)
+
+
+def test_optimize_route_rejects_wrong_sized_matrix():
+    points = [(0.0, 0.0), (0.01, 0.0), (0.0, 0.01)]
+    bad_matrix = [[0.0, 1.0], [1.0, 0.0]]  # 2x2 for 3 points
+    with pytest.raises(ValueError):
+        optimize_route(points, distance_matrix=bad_matrix)
+
+
 def test_astar_matches_brute_force_with_more_points():
     # A larger, irregular spread than the 5-point case above: more nodes
     # means more (node, visited-set) states get requeued with a cheaper

@@ -61,6 +61,10 @@ flowchart LR
   con A* y heurística de árbol de expansión mínima (MST) — ver
   [docs/CALIDAD_ISO25010.md](docs/CALIDAD_ISO25010.md) para el detalle de por qué
   esto garantiza la ruta óptima, no una aproximación.
+- Las distancias vienen de **OSRM** (ruteo real por calles, sobre OpenStreetMap),
+  con **fallback automático** a distancia en línea recta si OSRM no responde —
+  nunca se rompe la petición, y la respuesta siempre indica cuál se usó
+  (`routing_source: "OSRM" | "HAVERSINE"`).
 
 ## Stack tecnológico
 

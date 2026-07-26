@@ -11,6 +11,9 @@ psycopg2-binary==2.9.9
 # Cache (route optimization results)
 django-redis==5.4.0
 
+# HTTP client (OSRM road-routing lookups)
+requests==2.32.3
+
 # Config / environment
 django-environ==0.11.2
 

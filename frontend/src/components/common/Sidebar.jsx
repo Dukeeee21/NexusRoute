@@ -17,8 +17,8 @@ import {
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", Icon: IconDashboard, to: "/admin" },
   { key: "deliveries", label: "Entregas", Icon: IconBox, to: "/admin/deliveries" },
-  { key: "vehicles", label: "Vehículos", Icon: IconTruck, to: null },
-  { key: "routes", label: "Rutas", Icon: IconRoute, to: null },
+  { key: "vehicles", label: "Vehículos", Icon: IconTruck, to: "/admin/vehicles" },
+  { key: "routes", label: "Rutas", Icon: IconRoute, to: "/admin/routes" },
   { key: "reports", label: "Reportes", Icon: IconChart, to: null },
 ];
 
@@ -70,7 +70,10 @@ export default function Sidebar({ active = "dashboard" }) {
 
       {/* New route CTA */}
       <div className="px-3 py-2">
-        <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-nexus-primary px-3 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90">
+        <button
+          onClick={() => navigate("/admin/routes")}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-nexus-primary px-3 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        >
           <IconPlus width={16} height={16} />
           Nueva Ruta
         </button>

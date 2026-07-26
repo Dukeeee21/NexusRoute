@@ -4,6 +4,8 @@ import ProtectedRoute from "./components/common/ProtectedRoute.jsx";
 import Login from "./pages/auth/Login.jsx";
 import Dashboard from "./pages/admin/Dashboard.jsx";
 import Deliveries from "./pages/admin/Deliveries.jsx";
+import Vehicles from "./pages/admin/Vehicles.jsx";
+import RoutesPage from "./pages/admin/Routes.jsx";
 import DriverView from "./pages/driver/DriverView.jsx";
 import { ROLES } from "./utils/constants.js";
 
@@ -31,6 +33,24 @@ export default function App() {
         element={
           <ProtectedRoute role={ROLES.ADMIN}>
             <Deliveries />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/vehicles"
+        element={
+          <ProtectedRoute role={ROLES.ADMIN}>
+            <Vehicles />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/routes"
+        element={
+          <ProtectedRoute role={ROLES.ADMIN}>
+            <RoutesPage />
           </ProtectedRoute>
         }
       />

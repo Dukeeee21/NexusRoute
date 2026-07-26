@@ -1,16 +1,24 @@
-"""Views for the route optimization engine."""
+"""Views for the route optimization engine and route assignment."""
 import hashlib
 import json
 
 from django.core.cache import cache
 from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.users.permissions import IsAdminOrReadOnly
+
 from .algorithms.astar import TooManyStopsError, optimize_route
-from .serializers import OptimizeRequestSerializer, OptimizeResponseSerializer
+from .models import Route
+from .serializers import (
+    OptimizeRequestSerializer,
+    OptimizeResponseSerializer,
+    RouteCreateSerializer,
+    RouteSerializer,
+)
 
 # Optimized routes for the same points are deterministic, so results are
 # cached to keep the endpoint well within the < 2s SLA on repeat calls.
@@ -90,3 +98,42 @@ class OptimizeRouteView(APIView):
             "cached": was_cached,
         }
         return Response(payload)
+
+
+class RouteViewSet(viewsets.ModelViewSet):
+    """
+    Persisted route assignments.
+
+    - `POST /api/routes/` (admin only): optimize + assign a driver/vehicle
+      to a set of pending deliveries, returning the saved plan.
+    - `GET /api/routes/` / `GET /api/routes/{id}/`: list/retrieve plans.
+      Drivers only see their own routes; admins see all.
+
+    Routes are immutable snapshots for this phase (no update/delete) —
+    progress is tracked per-delivery via /api/deliveries/{id}/status/.
+    """
+
+    permission_classes = (IsAdminOrReadOnly,)
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_serializer_class(self):
+        return RouteCreateSerializer if self.action == "create" else RouteSerializer
+
+    def get_queryset(self):
+        qs = Route.objects.select_related("driver", "vehicle").prefetch_related(
+            "stops__delivery__package"
+        )
+        user = self.request.user
+        if user.is_authenticated and user.is_driver:
+            qs = qs.filter(driver=user)
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        serializer = RouteCreateSerializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        route = serializer.save()
+        return Response(
+            RouteSerializer(route).data, status=status.HTTP_201_CREATED
+        )

@@ -3,6 +3,7 @@
 import hashlib
 import json
 
+from django.conf import settings
 from django.core.cache import cache
 from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
@@ -97,6 +98,28 @@ class OptimizeRouteView(APIView):
             "cached": was_cached,
         }
         return Response(payload)
+
+
+class DepotConfigView(APIView):
+    """
+    GET /api/routes/depot/
+
+    Exposes the configured depot (label + coordinates) so the frontend
+    can default a delivery's origin to it instead of asking whoever is
+    creating the delivery to type in raw coordinates for a location
+    that, in practice, is almost always the same warehouse.
+    """
+
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        return Response(
+            {
+                "label": settings.DEPOT_LABEL,
+                "lat": settings.DEPOT_LAT,
+                "lng": settings.DEPOT_LNG,
+            }
+        )
 
 
 class RouteViewSet(viewsets.ModelViewSet):

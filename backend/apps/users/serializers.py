@@ -1,4 +1,5 @@
 """Serializers for the users app."""
+
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -27,7 +28,9 @@ class UserSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     """Create a user with a write-only, validated password."""
 
-    password = serializers.CharField(write_only=True, min_length=8, style={"input_type": "password"})
+    password = serializers.CharField(
+        write_only=True, min_length=8, style={"input_type": "password"}
+    )
 
     class Meta:
         model = User

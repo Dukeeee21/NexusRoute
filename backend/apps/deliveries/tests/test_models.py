@@ -1,4 +1,5 @@
 """Tests for Package and Delivery models."""
+
 import pytest
 
 from apps.deliveries.models import Delivery, Package
@@ -22,6 +23,19 @@ def package(db):
 def test_package_auto_tracking_code(package):
     assert package.tracking_code.startswith("NX-")
     assert len(package.tracking_code) == 9  # "NX-" + 6 hex chars
+
+
+@pytest.mark.django_db
+def test_package_str(package):
+    assert package.tracking_code in str(package)
+    assert "TechCorp Ltda." in str(package)
+
+
+@pytest.mark.django_db
+def test_delivery_str(package):
+    delivery = Delivery.objects.create(package=package)
+    assert package.tracking_code in str(delivery)
+    assert "Pendiente" in str(delivery)
 
 
 @pytest.mark.django_db

@@ -1,4 +1,5 @@
 """Views for the deliveries app."""
+
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -46,9 +47,7 @@ class DeliveryViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"])
     def status(self, request, pk=None):
         delivery = self.get_object()  # runs has_object_permission via check_object_permissions
-        serializer = DeliveryStatusSerializer(
-            delivery, data=request.data, partial=True
-        )
+        serializer = DeliveryStatusSerializer(delivery, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(DeliverySerializer(delivery).data)

@@ -1,4 +1,5 @@
 """Tests for the User model and its role helpers."""
+
 import pytest
 from django.contrib.auth import get_user_model
 
@@ -26,8 +27,6 @@ def test_create_admin_role():
 
 @pytest.mark.django_db
 def test_user_str_includes_role_label():
-    user = User.objects.create_user(
-        username="ana", password="testpass123", role=User.Role.ADMIN
-    )
+    user = User.objects.create_user(username="ana", password="testpass123", role=User.Role.ADMIN)
     assert "ana" in str(user)
     assert "Administrador" in str(user)

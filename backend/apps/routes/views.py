@@ -1,4 +1,5 @@
 """Views for the route optimization engine and route assignment."""
+
 import hashlib
 import json
 
@@ -71,9 +72,7 @@ class OptimizeRouteView(APIView):
             try:
                 result = optimize_route(coords, start_index=0)
             except TooManyStopsError as exc:
-                return Response(
-                    {"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
             geometry = {
                 "order_indices": result.order,
                 "legs": [
@@ -129,11 +128,7 @@ class RouteViewSet(viewsets.ModelViewSet):
         return qs
 
     def create(self, request, *args, **kwargs):
-        serializer = RouteCreateSerializer(
-            data=request.data, context={"request": request}
-        )
+        serializer = RouteCreateSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         route = serializer.save()
-        return Response(
-            RouteSerializer(route).data, status=status.HTTP_201_CREATED
-        )
+        return Response(RouteSerializer(route).data, status=status.HTTP_201_CREATED)

@@ -11,6 +11,7 @@ Routes are treated as immutable plans for Phase 4 — reassigning or
 editing a route is out of scope here; Phase 5 tracks progress through
 each Delivery's own status field.
 """
+
 from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _

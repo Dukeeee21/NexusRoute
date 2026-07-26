@@ -7,6 +7,7 @@ vehicle, and tracks its status through the pipeline:
 
     PENDING -> IN_TRANSIT -> DELIVERED
 """
+
 import uuid
 
 from django.conf import settings
@@ -30,9 +31,7 @@ class Package(models.Model):
     )
     client_name = models.CharField(_("cliente"), max_length=120)
     description = models.CharField(_("descripción"), max_length=255, blank=True)
-    weight_kg = models.DecimalField(
-        _("peso (kg)"), max_digits=8, decimal_places=2, default=0
-    )
+    weight_kg = models.DecimalField(_("peso (kg)"), max_digits=8, decimal_places=2, default=0)
 
     origin_address = models.CharField(_("origen"), max_length=255)
     origin_lat = models.FloatField(_("latitud origen"))

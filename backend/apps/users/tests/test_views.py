@@ -1,4 +1,5 @@
 """Tests for authentication and user endpoints."""
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -14,9 +15,7 @@ def api_client():
 
 @pytest.fixture
 def admin_user(db):
-    return User.objects.create_user(
-        username="admin", password="testpass123", role=User.Role.ADMIN
-    )
+    return User.objects.create_user(username="admin", password="testpass123", role=User.Role.ADMIN)
 
 
 @pytest.fixture
@@ -29,9 +28,7 @@ def driver_user(db):
 @pytest.mark.django_db
 def test_login_returns_tokens_and_role(api_client, admin_user):
     url = reverse("token_obtain_pair")
-    resp = api_client.post(
-        url, {"username": "admin", "password": "testpass123"}, format="json"
-    )
+    resp = api_client.post(url, {"username": "admin", "password": "testpass123"}, format="json")
     assert resp.status_code == 200
     assert "access" in resp.data
     assert "refresh" in resp.data

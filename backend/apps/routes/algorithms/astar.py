@@ -30,6 +30,7 @@ The state space is O(n * 2^n), so this exact solver is intended for a
 driver's daily route. `MAX_STOPS` caps the input to keep responses well
 under the 2-second SLA.
 """
+
 from __future__ import annotations
 
 import heapq
@@ -87,9 +88,7 @@ def _mst_weight(nodes: tuple[int, ...], matrix: list[list[float]]) -> float:
     return total
 
 
-def optimize_route(
-    points: list[tuple[float, float]], start_index: int = 0
-) -> RouteResult:
+def optimize_route(points: list[tuple[float, float]], start_index: int = 0) -> RouteResult:
     """
     Return the optimal visiting order for `points` starting at `start_index`.
 
@@ -100,9 +99,7 @@ def optimize_route(
     if n == 0:
         raise ValueError("Se requiere al menos un punto de origen.")
     if n - 1 > MAX_STOPS:
-        raise TooManyStopsError(
-            f"Máximo {MAX_STOPS} paradas por ruta (se recibieron {n - 1})."
-        )
+        raise TooManyStopsError(f"Máximo {MAX_STOPS} paradas por ruta (se recibieron {n - 1}).")
     if n == 1:
         return RouteResult(order=[start_index], legs=[], total_distance_km=0.0)
 
@@ -125,9 +122,16 @@ def optimize_route(
             ]
             return RouteResult(order=path, legs=legs, total_distance_km=round(g, 4))
 
-        # Skip stale queue entries superseded by a cheaper path.
+        # Skip stale queue entries superseded by a cheaper path. This is a
+        # standard lazy-deletion optimization for heap-based Dijkstra/A*;
+        # whether it ever fires depends on the priority queue's internal
+        # processing order for a given input, so it isn't reliably
+        # triggered by any specific small test graph (tests exercise up
+        # to 7 points and it wasn't hit). Correctness doesn't depend on
+        # it — `best_g` guards every push, so a stale pop is a no-op
+        # either way — it only skips redundant work.
         if g > best_g.get((current, visited), float("inf")):
-            continue
+            continue  # pragma: no cover
 
         for nxt in all_nodes - visited:
             new_g = g + matrix[current][nxt]
@@ -137,9 +141,9 @@ def optimize_route(
                 best_g[key] = new_g
                 remaining = tuple(all_nodes - new_visited) + (nxt,)
                 h = _mst_weight(remaining, matrix)
-                heapq.heappush(
-                    frontier, (new_g + h, new_g, nxt, new_visited, path + [nxt])
-                )
+                heapq.heappush(frontier, (new_g + h, new_g, nxt, new_visited, path + [nxt]))
 
-    # Unreachable for a fully connected graph, but keep the contract safe.
-    raise RuntimeError("No se pudo calcular una ruta.")
+    # Unreachable for a fully connected graph (every pair of points has a
+    # finite haversine distance), but kept as a safety net against a
+    # malformed distance matrix rather than silently returning nothing.
+    raise RuntimeError("No se pudo calcular una ruta.")  # pragma: no cover

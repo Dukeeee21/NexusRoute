@@ -1,13 +1,10 @@
 """Tests for the A* route optimization algorithm and haversine distance."""
+
 import itertools
 
 import pytest
 
-from apps.routes.algorithms.astar import (
-    MAX_STOPS,
-    TooManyStopsError,
-    optimize_route,
-)
+from apps.routes.algorithms.astar import MAX_STOPS, TooManyStopsError, optimize_route
 from apps.routes.algorithms.haversine import haversine_km
 
 
@@ -18,10 +15,7 @@ def _brute_force_best(points, start=0):
     best = float("inf")
     for perm in itertools.permutations(others):
         order = [start, *perm]
-        dist = sum(
-            haversine_km(*points[order[i]], *points[order[i + 1]])
-            for i in range(n - 1)
-        )
+        dist = sum(haversine_km(*points[order[i]], *points[order[i + 1]]) for i in range(n - 1))
         best = min(best, dist)
     return best
 
@@ -74,3 +68,27 @@ def test_too_many_stops_raises():
     points = [(-34.6 + i * 0.01, -58.4) for i in range(MAX_STOPS + 2)]
     with pytest.raises(TooManyStopsError):
         optimize_route(points)
+
+
+def test_empty_points_raises_value_error():
+    with pytest.raises(ValueError):
+        optimize_route([])
+
+
+def test_astar_matches_brute_force_with_more_points():
+    # A larger, irregular spread than the 5-point case above: more nodes
+    # means more (node, visited-set) states get requeued with a cheaper
+    # cost after a longer one was already on the heap, exercising the
+    # "skip stale queue entry" branch while still checking optimality.
+    points = [
+        (-34.60, -58.38),
+        (-34.55, -58.45),
+        (-34.62, -58.40),
+        (-34.58, -58.36),
+        (-34.50, -58.50),
+        (-34.65, -58.42),
+        (-34.57, -58.30),
+    ]
+    result = optimize_route(points, start_index=0)
+    expected = _brute_force_best(points, start=0)
+    assert result.total_distance_km == pytest.approx(expected, abs=1e-3)

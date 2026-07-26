@@ -1,4 +1,5 @@
 """URL routes for the vehicles app (mounted at /api/vehicles/)."""
+
 from rest_framework.routers import DefaultRouter
 
 from .views import VehicleViewSet

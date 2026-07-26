@@ -9,6 +9,7 @@ Django groups. NexusRoute has exactly two operational roles:
 
 The role drives DRF permission checks (see apps/users/permissions.py).
 """
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _

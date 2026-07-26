@@ -17,6 +17,11 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 
+class RoutingSource(models.TextChoices):
+    OSRM = "OSRM", _("Calles reales (OSRM)")
+    HAVERSINE = "HAVERSINE", _("Línea recta (estimación)")
+
+
 class Route(models.Model):
     driver = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -49,6 +54,25 @@ class Route(models.Model):
 
     total_distance_km = models.FloatField(_("distancia total (km)"))
     estimated_time_min = models.FloatField(_("tiempo estimado (min)"))
+
+    # Whether total_distance_km/estimated_time_min and `geometry` reflect
+    # real road distances (OSRM) or the haversine straight-line fallback
+    # — surfaced in the UI so the dispatcher knows which one they're
+    # looking at (see apps/routes/algorithms/osrm.py for the fallback
+    # logic; OSRM is a public, best-effort service with no uptime SLA).
+    routing_source = models.CharField(
+        _("fuente de ruteo"),
+        max_length=10,
+        choices=RoutingSource.choices,
+        default=RoutingSource.HAVERSINE,
+    )
+    # The actual road-following path as [[lat, lng], ...] from OSRM's
+    # Route service, in visiting order. Always null when routing_source
+    # is HAVERSINE; can also be null even when routing_source is OSRM
+    # if the (separate) geometry request specifically failed while the
+    # distance/duration one succeeded. The frontend draws straight
+    # segments between stops whenever this is null.
+    geometry = models.JSONField(_("geometría de la ruta"), null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

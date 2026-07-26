@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 
 from apps.users.permissions import IsAdminOrReadOnly
 
-from .algorithms.astar import TooManyStopsError, optimize_route
+from .algorithms.astar import TooManyStopsError
 from .models import Route
 from .serializers import (
     OptimizeRequestSerializer,
@@ -21,9 +21,14 @@ from .serializers import (
     RouteCreateSerializer,
     RouteSerializer,
 )
+from .services import compute_optimized_route
 
 # Optimized routes for the same points are deterministic, so results are
-# cached to keep the endpoint well within the < 2s SLA on repeat calls.
+# cached. Note: this keeps *repeat* requests fast, but a first-time
+# lookup now depends on network latency to OSRM (see services.py) —
+# the sub-2s figure documented in Fase 3 was measured before real road
+# routing existed and describes the algorithm's own compute time, not
+# a third-party network call; see docs/CALIDAD_ISO25010.md.
 CACHE_TTL_SECONDS = 60 * 60  # 1 hour
 
 
@@ -62,19 +67,21 @@ class OptimizeRouteView(APIView):
         ordered_points = [origin, *stops]
         coords = [(p["lat"], p["lng"]) for p in ordered_points]
 
-        # The geometry (order + distances) depends only on the coordinates,
-        # so that is what we cache. Labels come from the current request and
-        # are applied on every response, cached or not.
+        # Everything computed (order, distances, routing source, real
+        # duration, road geometry) depends only on the coordinates, so
+        # that is what we cache. Labels come from the current request
+        # and are applied on every response, cached or not.
         key = _cache_key(coords)
-        geometry = cache.get(key)
-        was_cached = geometry is not None
+        cached_result = cache.get(key)
+        was_cached = cached_result is not None
 
         if not was_cached:
             try:
-                result = optimize_route(coords, start_index=0)
+                optimized = compute_optimized_route(coords)
             except TooManyStopsError as exc:
                 return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-            geometry = {
+            result = optimized.result
+            cached_result = {
                 "order_indices": result.order,
                 "legs": [
                     {
@@ -85,17 +92,27 @@ class OptimizeRouteView(APIView):
                     for leg in result.legs
                 ],
                 "total_distance_km": result.total_distance_km,
+                "routing_source": optimized.routing_source,
+                "duration_min": optimized.duration_min,
+                "geometry": optimized.geometry,
             }
-            cache.set(key, geometry, CACHE_TTL_SECONDS)
+            cache.set(key, cached_result, CACHE_TTL_SECONDS)
 
-        total_km = geometry["total_distance_km"]
+        total_km = cached_result["total_distance_km"]
+        duration_min = cached_result.get("duration_min")
+        estimated_time_min = (
+            duration_min if duration_min is not None else round(total_km / avg_speed * 60, 2)
+        )
+
         payload = {
-            "order": [ordered_points[i] for i in geometry["order_indices"]],
-            "legs": geometry["legs"],
+            "order": [ordered_points[i] for i in cached_result["order_indices"]],
+            "legs": cached_result["legs"],
             "total_distance_km": total_km,
-            "estimated_time_min": round(total_km / avg_speed * 60, 2),
+            "estimated_time_min": estimated_time_min,
             "stops_count": len(stops),
             "cached": was_cached,
+            "routing_source": cached_result["routing_source"],
+            "geometry": cached_result.get("geometry"),
         }
         return Response(payload)
 

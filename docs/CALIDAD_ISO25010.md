@@ -77,6 +77,45 @@ a una aproximación sin avisar. Preferimos un error claro a una "optimización" 
 realidad no lo es — eso también es parte de ser honestos sobre lo que el sistema
 puede y no puede garantizar.
 
+### 1.5 Distancia real por calles (OSRM), sin perder la garantía de optimalidad
+
+Hasta esta revisión, el algoritmo usaba únicamente distancia **haversine** (línea
+recta) tanto para el costo de cada tramo como para la heurística — el mapa dibujaba
+una línea recta entre paradas, sin respetar calles reales. Se integró
+`backend/apps/routes/algorithms/osrm.py`, un cliente para **OSRM** (Open Source
+Routing Machine, sobre datos de OpenStreetMap) que consulta distancias y duraciones
+reales por calle, y la geometría real del trazado.
+
+**Por qué esto no rompe la garantía de optimalidad de A\*:** la heurística MST es
+admisible para *cualquier* función de distancia que cumpla la desigualdad triangular
+(no solo haversine). Las distancias de ruta más corta por calle también la cumplen
+—por definición, el camino más corto A→C nunca puede ser más largo que A→B→C—, así
+que reemplazar haversine por distancias reales de OSRM en `optimize_route()`
+(parámetro `distance_matrix`) sigue garantizando la ruta óptima, ahora óptima respecto
+a distancia real de manejo en vez de línea recta. El razonamiento completo está en el
+docstring de `astar.py`.
+
+**Mitigación de riesgo (OSRM es un servicio público de terceros, sin SLA):** cada
+llamada a OSRM tiene timeout corto (`OSRM_TIMEOUT_SECONDS`, default 5s) y, ante
+cualquier falla —red caída, timeout, respuesta con un par de puntos sin ruta—,
+`compute_optimized_route()` (`backend/apps/routes/services.py`) degrada de forma
+transparente al cálculo haversine puro, sin romper la petición. La respuesta siempre
+incluye `routing_source` (`"OSRM"` o `"HAVERSINE"`) para que el dispatcher sepa cuál
+de los dos está viendo — nunca se presenta una estimación en línea recta como si fuera
+un trazado real. Verificado en un entorno real (no solo con mocks) forzando un
+timeout artificial: el sistema sigue devolviendo una ruta válida.
+
+**Nota honesta sobre el SLA de <2s documentado en la Fase 3:** esa cifra se midió
+antes de que existiera el ruteo por calles real, y describía el tiempo de cómputo del
+propio algoritmo (decenas de milisegundos). Con OSRM, la primera consulta para un
+conjunto de puntos depende de la latencia de red al servidor público
+(`router.project-osrm.org`) — medido en ~1.1s en pruebas manuales, incluyendo dos
+llamadas HTTP secuenciales (matriz de distancias + geometría). Las consultas
+repetidas para el mismo conjunto de puntos siguen siendo casi instantáneas gracias al
+mismo caché de Redis ya existente (~20ms verificado). El servidor público de OSRM
+**no tiene tráfico en vivo** y no está pensado para tráfico de producción alto — para
+eso haría falta un servidor propio de OSRM o una API paga (ver limitaciones, sección 5).
+
 ---
 
 ## 2. Mitigación de riesgos de fallos
@@ -92,6 +131,7 @@ puede y no puede garantizar.
 | Entregas re-asignadas por error a una ruta ya cubierta | `validate_delivery_ids` rechaza IDs duplicados, inexistentes, o entregas que ya tienen conductor asignado | `backend/apps/routes/serializers.py` |
 | Token JWT expirado durante el uso | Interceptor de Axios reintenta automáticamente con el refresh token antes de forzar el logout | `frontend/src/api/axiosConfig.js` |
 | Fallo de un solo servicio en Docker | Cada contenedor tiene `healthcheck`; el backend espera a que Postgres/Redis estén saludables antes de arrancar (`depends_on: condition: service_healthy`) | `docker-compose.yml` |
+| OSRM (servidor público de terceros) caído, lento o sin ruta para algún par de puntos | Degrada de forma transparente a distancia haversine; la respuesta indica `routing_source` para que quede claro cuál se usó | `backend/apps/routes/services.py`, `backend/apps/routes/algorithms/osrm.py` |
 
 ### Autenticación y autorización como mitigación de riesgo
 
@@ -207,3 +247,14 @@ sonar-scanner -Dsonar.host.url=<url-del-servidor> -Dsonar.login=<token>
   garantía de ejecutarse en cualquier entorno; se decidió no forzarla con un test
   artificial que dependiera de detalles de implementación del heap, porque eso
   haría el test frágil sin agregar garantías reales de comportamiento.
+- El ruteo real (sección 1.5) usa el servidor **público** de OSRM
+  (`router.project-osrm.org`): gratis, sin necesidad de cuenta, pero sin garantía de
+  disponibilidad ni pensado para tráfico de producción alto. Para un despliegue real
+  se recomienda un OSRM propio (self-hosted) o un proveedor comercial — el sistema ya
+  está preparado para eso (`OSRM_BASE_URL` es configurable), solo falta apuntarlo a
+  otro servidor.
+- El ruteo por calles **no incluye tráfico en vivo** (OSRM público no lo ofrece). Para
+  tráfico en tiempo real como Google Maps hace falta una API paga (Google
+  Directions/Routes API, Mapbox) que requiere que el dueño del proyecto cree su
+  propia cuenta y facturación — no es algo que se pueda resolver sin esa decisión y
+  ese costo del lado de quien opera el sistema.

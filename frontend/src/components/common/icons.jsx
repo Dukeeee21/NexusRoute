@@ -180,3 +180,10 @@ export const IconDownload = (p) => (
     <path d="M12 15V3" />
   </svg>
 );
+
+export const IconMail = (p) => (
+  <svg {...base} {...p}>
+    <rect x="2" y="4" width="20" height="16" rx="2" />
+    <path d="m2 7 10 6 10-6" />
+  </svg>
+);

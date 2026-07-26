@@ -7,13 +7,22 @@ from rest_framework import serializers
 from apps.deliveries.models import Delivery
 from apps.vehicles.models import Vehicle
 
-from .algorithms.astar import TooManyStopsError, optimize_route
+from .algorithms.astar import TooManyStopsError
 from .models import Route, RouteStop
+from .services import compute_optimized_route
 
 User = get_user_model()
 
-# Used only to turn total distance into an estimated duration.
+# Used only when OSRM's real duration isn't available (haversine
+# fallback) to turn total distance into an estimated duration.
 DEFAULT_SPEED_KMH = 40.0
+
+GeometryField = serializers.ListField(
+    child=serializers.ListField(child=serializers.FloatField(), min_length=2, max_length=2),
+    required=False,
+    allow_null=True,
+    help_text="Road-following path as [[lat, lng], ...], or null (see routing_source).",
+)
 
 
 class PointSerializer(serializers.Serializer):
@@ -53,6 +62,10 @@ class OptimizeResponseSerializer(serializers.Serializer):
     estimated_time_min = serializers.FloatField()
     stops_count = serializers.IntegerField()
     cached = serializers.BooleanField()
+    routing_source = serializers.CharField(
+        help_text="OSRM (real road distances) or HAVERSINE (straight-line fallback)."
+    )
+    geometry = GeometryField
 
 
 # ── Route assignment (persisted plans) ─────────────────────────────
@@ -108,6 +121,8 @@ class RouteSerializer(serializers.ModelSerializer):
             "origin_lng",
             "total_distance_km",
             "estimated_time_min",
+            "routing_source",
+            "geometry",
             "stops",
             "created_at",
         )
@@ -168,13 +183,20 @@ class RouteCreateSerializer(serializers.Serializer):
         ]
 
         try:
-            result = optimize_route(coords, start_index=0)
+            optimized = compute_optimized_route(coords)
         except TooManyStopsError as exc:
             raise serializers.ValidationError({"delivery_ids": str(exc)})
 
+        result = optimized.result
         driver = validated_data["driver"]
         vehicle = validated_data["vehicle"]
         request = self.context.get("request")
+
+        estimated_time_min = (
+            optimized.duration_min
+            if optimized.duration_min is not None
+            else round(result.total_distance_km / DEFAULT_SPEED_KMH * 60, 2)
+        )
 
         route = Route.objects.create(
             driver=driver,
@@ -184,7 +206,9 @@ class RouteCreateSerializer(serializers.Serializer):
             origin_lat=origin_lat,
             origin_lng=origin_lng,
             total_distance_km=result.total_distance_km,
-            estimated_time_min=round(result.total_distance_km / DEFAULT_SPEED_KMH * 60, 2),
+            estimated_time_min=estimated_time_min,
+            routing_source=optimized.routing_source,
+            geometry=optimized.geometry,
         )
 
         # result.order[0] is the origin (index 0); every later index maps

@@ -145,6 +145,16 @@ DEPOT_LAT = env.float("DEPOT_LAT", default=-12.0464)
 DEPOT_LNG = env.float("DEPOT_LNG", default=-77.0428)
 DEPOT_LABEL = env("DEPOT_LABEL", default="Depósito Central - Lima")
 
+# ── Road routing (OSRM) ───────────────────────────────────────────
+# Defaults to the public OSRM demo server — free, no API key, but not
+# guaranteed uptime/SLA (it's meant for evaluation, not heavy
+# production traffic). Point OSRM_BASE_URL at a self-hosted instance
+# to remove that dependency. Every call gracefully falls back to
+# straight-line (haversine) distance if this is unreachable or slow —
+# see apps/routes/algorithms/osrm.py.
+OSRM_BASE_URL = env("OSRM_BASE_URL", default="https://router.project-osrm.org")
+OSRM_TIMEOUT_SECONDS = env.float("OSRM_TIMEOUT_SECONDS", default=5.0)
+
 # ── Django REST Framework ─────────────────────────────────────────
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (

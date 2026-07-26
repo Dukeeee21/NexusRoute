@@ -189,6 +189,8 @@ export default function Routes() {
                       lat: s.lat,
                       lng: s.lng,
                     }))}
+                    geometry={activeRoute.geometry}
+                    routingSource={activeRoute.routing_source}
                   />
                   <RouteDetail route={activeRoute} />
                 </>
@@ -215,13 +217,14 @@ export default function Routes() {
                     <th className="px-5 py-3 font-medium">Paradas</th>
                     <th className="px-5 py-3 font-medium">Distancia</th>
                     <th className="px-5 py-3 font-medium">Tiempo est.</th>
+                    <th className="px-5 py-3 font-medium">Ruteo</th>
                     <th className="px-5 py-3 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {pastRoutes.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-5 py-8 text-center text-slate-500">
+                      <td colSpan={8} className="px-5 py-8 text-center text-slate-500">
                         Aún no hay rutas asignadas.
                       </td>
                     </tr>
@@ -237,6 +240,17 @@ export default function Routes() {
                       <td className="px-5 py-3 text-slate-400">{r.stops.length}</td>
                       <td className="px-5 py-3 text-slate-400">{r.total_distance_km} km</td>
                       <td className="px-5 py-3 text-slate-400">{r.estimated_time_min} min</td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
+                            r.routing_source === "OSRM"
+                              ? "bg-status-delivered/15 text-status-delivered"
+                              : "bg-status-pending/15 text-status-pending"
+                          }`}
+                        >
+                          {r.routing_source === "OSRM" ? "🛣️ Real" : "📏 Estimado"}
+                        </span>
+                      </td>
                       <td className="px-5 py-3 text-right">
                         <button
                           onClick={() => setActiveRoute(r)}

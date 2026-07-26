@@ -17,12 +17,20 @@ function stopIcon(label, isOrigin) {
 }
 
 /**
- * Renders the origin plus ordered stops on an OpenStreetMap/Leaflet map,
- * connected by a polyline in visiting order. `origin`/`stops` are
- * { label, lat, lng } objects — `stops` must already be in visit order
- * (as returned by the optimizer / a saved Route).
+ * Renders the origin plus ordered stops on an OpenStreetMap/Leaflet map.
+ * `origin`/`stops` are { label, lat, lng } objects — `stops` must
+ * already be in visit order (as returned by the optimizer / a saved
+ * Route).
+ *
+ * `geometry` — a road-following path as [[lat, lng], ...] from OSRM —
+ * draws the polyline through actual streets when available. Without
+ * it (`routingSource` is "HAVERSINE" or geometry wasn't returned),
+ * this falls back to straight segments connecting the stops directly,
+ * same as before real road routing existed; the badge makes that
+ * distinction visible instead of silently drawing a straight line
+ * that looks like a real route.
  */
-export default function RouteMap({ origin, stops }) {
+export default function RouteMap({ origin, stops, geometry, routingSource }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
@@ -57,9 +65,16 @@ export default function RouteMap({ origin, stops }) {
     layerRef.current = group;
 
     const points = [origin, ...stops];
-    const latlngs = points.map((p) => [p.lat, p.lng]);
+    const straightLatLngs = points.map((p) => [p.lat, p.lng]);
+    const hasRealGeometry = Array.isArray(geometry) && geometry.length > 0;
+    const pathLatLngs = hasRealGeometry ? geometry : straightLatLngs;
 
-    L.polyline(latlngs, { color: "#3B82F6", weight: 4, opacity: 0.8 }).addTo(group);
+    L.polyline(pathLatLngs, {
+      color: "#3B82F6",
+      weight: 4,
+      opacity: 0.8,
+      dashArray: hasRealGeometry ? undefined : "6 6",
+    }).addTo(group);
 
     points.forEach((p, i) => {
       L.marker([p.lat, p.lng], { icon: stopIcon(i === 0 ? "O" : i, i === 0) })
@@ -67,17 +82,37 @@ export default function RouteMap({ origin, stops }) {
         .addTo(group);
     });
 
-    if (latlngs.length > 1) {
-      map.fitBounds(latlngs, { padding: [40, 40] });
+    if (straightLatLngs.length > 1) {
+      map.fitBounds(pathLatLngs, { padding: [40, 40] });
     } else {
-      map.setView(latlngs[0], 13);
+      map.setView(straightLatLngs[0], 13);
     }
-  }, [origin, stops]);
+  }, [origin, stops, geometry]);
+
+  const isRealRoad = routingSource === "OSRM";
 
   return (
-    <div
-      ref={containerRef}
-      className="h-80 w-full overflow-hidden rounded-xl border border-nexus-border"
-    />
+    <div className="relative">
+      <div
+        ref={containerRef}
+        className="h-80 w-full overflow-hidden rounded-xl border border-nexus-border"
+      />
+      {routingSource && (
+        <span
+          className={`pointer-events-none absolute right-3 top-3 z-[1000] rounded-full px-2.5 py-1 text-xs font-medium shadow ${
+            isRealRoad
+              ? "bg-status-delivered/90 text-white"
+              : "bg-status-pending/90 text-white"
+          }`}
+          title={
+            isRealRoad
+              ? "Trazado por calles reales (OSRM)"
+              : "Estimación en línea recta — OSRM no disponible"
+          }
+        >
+          {isRealRoad ? "🛣️ Calles reales" : "📏 Línea recta (estimado)"}
+        </span>
+      )}
+    </div>
   );
 }

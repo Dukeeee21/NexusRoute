@@ -15,20 +15,29 @@ We search a state space where each state is:
 
 The start state is the origin with only itself visited; a goal state is
 any state where every point has been visited. Moving to an unvisited
-point costs the haversine distance between the two points (g). The
-heuristic h(state) is the weight of the Minimum Spanning Tree over the
-still-unvisited points plus the current point.
+point costs the distance between the two points (g) — by default the
+haversine (straight-line) distance, but a caller can supply a real
+road-network matrix instead (see `distance_matrix` below and
+apps/routes/algorithms/osrm.py). The heuristic h(state) is the weight
+of the Minimum Spanning Tree over the still-unvisited points plus the
+current point.
 
 That MST is an admissible and consistent lower bound on the remaining
 path (any path visiting the rest is itself a spanning tree of those
-nodes, so it cannot be shorter than the MST). Because the heuristic is
-admissible, A* returns the provably optimal ordering — this is what
-makes the route "explainable": every leg is the shortest possible given
-what remains.
+nodes, so it cannot be shorter than the MST) — for *any* distance
+function that satisfies the triangle inequality, not just haversine.
+Road-network shortest-path distances satisfy it too (the shortest path
+A→C can never be longer than A→B→C, by definition of "shortest"), so
+swapping in real road distances doesn't break the optimality guarantee:
+A* still returns the provably optimal ordering, just optimal with
+respect to real driving distance instead of straight-line distance.
+This is what makes the route "explainable": every leg is the shortest
+possible given what remains, under whichever metric was used.
 
 The state space is O(n * 2^n), so this exact solver is intended for a
-driver's daily route. `MAX_STOPS` caps the input to keep responses well
-under the 2-second SLA.
+driver's daily route. `MAX_STOPS` caps the input to keep the search
+itself fast — a `distance_matrix` sourced from an external routing
+service has its own, separate latency budget (see the caller).
 """
 
 from __future__ import annotations
@@ -88,12 +97,36 @@ def _mst_weight(nodes: tuple[int, ...], matrix: list[list[float]]) -> float:
     return total
 
 
-def optimize_route(points: list[tuple[float, float]], start_index: int = 0) -> RouteResult:
+def _resolve_matrix(
+    points: list[tuple[float, float]], distance_matrix: list[list[float]] | None
+) -> list[list[float]]:
+    """Validate a caller-supplied matrix, or compute the haversine one."""
+    if distance_matrix is None:
+        return _distance_matrix(points)
+    n = len(points)
+    if len(distance_matrix) != n or any(len(row) != n for row in distance_matrix):
+        raise ValueError("distance_matrix debe ser de tamaño len(points) x len(points).")
+    return distance_matrix
+
+
+def optimize_route(
+    points: list[tuple[float, float]],
+    start_index: int = 0,
+    distance_matrix: list[list[float]] | None = None,
+) -> RouteResult:
     """
     Return the optimal visiting order for `points` starting at `start_index`.
 
     `points` is a list of (lat, lng). The first element of the returned
     order is always `start_index`.
+
+    By default the distance between every pair of points is the
+    haversine (straight-line) distance. Pass `distance_matrix` — an
+    NxN matrix of real distances, e.g. from OSRM — to optimize (and
+    report totals) against actual road distance instead; see the
+    module docstring for why this doesn't break A*'s optimality
+    guarantee. The matrix must be symmetric with `matrix[i][i] == 0`
+    and sized exactly `len(points)`.
     """
     n = len(points)
     if n == 0:
@@ -103,7 +136,7 @@ def optimize_route(points: list[tuple[float, float]], start_index: int = 0) -> R
     if n == 1:
         return RouteResult(order=[start_index], legs=[], total_distance_km=0.0)
 
-    matrix = _distance_matrix(points)
+    matrix = _resolve_matrix(points, distance_matrix)
     all_nodes = frozenset(range(n))
 
     # Priority queue of (f, g, current, visited, path).

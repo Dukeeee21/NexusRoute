@@ -1,6 +1,6 @@
 """
 Seeds a working demo environment: an admin, two drivers, two vehicles
-and a handful of unassigned pending deliveries around Buenos Aires.
+and a handful of unassigned pending deliveries around Lima, Perú.
 
 Idempotent — safe to run more than once (uses get_or_create throughout).
 This is what makes the README's quickstart actually reproducible: a
@@ -18,14 +18,14 @@ from apps.vehicles.models import Vehicle
 User = get_user_model()
 
 DELIVERIES = [
-    ("TechCorp Ltda.", "Palermo, CABA", -34.5711, -58.4233),
-    ("Distribuidora SUR", "La Boca, CABA", -34.6345, -58.3631),
-    ("MegaRetail S.A.", "Belgrano, CABA", -34.5627, -58.4583),
-    ("Hospital General", "San Telmo, CABA", -34.6211, -58.3731),
-    ("Panadería Central", "Caballito, CABA", -34.6190, -58.4408),
+    ("TechCorp Ltda.", "Miraflores, Lima", -12.1211, -77.0282),
+    ("Distribuidora SUR", "Barranco, Lima", -12.1494, -77.0209),
+    ("MegaRetail S.A.", "San Isidro, Lima", -12.0931, -77.0465),
+    ("Hospital General", "San Borja, Lima", -12.1085, -76.9986),
+    ("Panadería Central", "Pueblo Libre, Lima", -12.0742, -77.0631),
 ]
 
-DEPOT = ("Depósito Central", -34.6037, -58.3816)
+DEPOT = ("Depósito Central - Lima", -12.0464, -77.0428)
 
 
 class Command(BaseCommand):

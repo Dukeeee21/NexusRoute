@@ -3,7 +3,7 @@
 /** "10:45 AM" style time from an ISO timestamp. */
 export function formatTime(iso) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("es-AR", {
+  return new Date(iso).toLocaleTimeString("es-PE", {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -12,7 +12,7 @@ export function formatTime(iso) {
 /** "26 jun 2026" style date from an ISO timestamp. */
 export function formatDate(iso) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-AR", {
+  return new Date(iso).toLocaleDateString("es-PE", {
     day: "2-digit",
     month: "short",
     year: "numeric",

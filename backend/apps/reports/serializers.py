@@ -1,5 +1,6 @@
 """Serializers for the reports app. All fields are computed (there is no
 Report model — everything is aggregated from deliveries/routes)."""
+
 from rest_framework import serializers
 
 

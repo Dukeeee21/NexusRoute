@@ -1,14 +1,11 @@
 """Views for the users app."""
+
 from django.contrib.auth import get_user_model
 from rest_framework import generics, permissions, viewsets
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .permissions import IsAdmin
-from .serializers import (
-    CustomTokenObtainPairSerializer,
-    RegisterSerializer,
-    UserSerializer,
-)
+from .serializers import CustomTokenObtainPairSerializer, RegisterSerializer, UserSerializer
 
 User = get_user_model()
 

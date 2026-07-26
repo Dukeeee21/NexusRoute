@@ -1,4 +1,5 @@
 """Serializers for the deliveries app."""
+
 from rest_framework import serializers
 
 from .models import Delivery, Package

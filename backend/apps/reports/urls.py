@@ -1,4 +1,5 @@
 """URL routes for the reports app (mounted at /api/reports/). Admin only."""
+
 from django.urls import path
 
 from .views import (

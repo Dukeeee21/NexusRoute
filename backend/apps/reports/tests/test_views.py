@@ -1,4 +1,5 @@
 """Tests for the reports (performance) API — admin-only KPIs."""
+
 from datetime import timedelta
 
 import pytest
@@ -24,13 +25,20 @@ def admin_client(db):
 
 @pytest.fixture
 def driver(db):
-    return User.objects.create_user(username="conductor", password="pass12345", role=User.Role.DRIVER)
+    return User.objects.create_user(
+        username="conductor", password="pass12345", role=User.Role.DRIVER
+    )
 
 
 def _delivery(driver=None, status=Delivery.Status.PENDING):
     package = Package.objects.create(
-        client_name="Cliente", origin_address="A", origin_lat=0, origin_lng=0,
-        destination_address="B", destination_lat=1, destination_lng=1,
+        client_name="Cliente",
+        origin_address="A",
+        origin_lat=0,
+        origin_lng=0,
+        destination_address="B",
+        destination_lat=1,
+        destination_lng=1,
     )
     return Delivery.objects.create(package=package, driver=driver, status=status)
 
@@ -50,9 +58,7 @@ def test_performance_summary_counts(admin_client, driver):
     _delivery(driver=driver, status=Delivery.Status.IN_TRANSIT)
 
     d = _delivery(driver=driver, status=Delivery.Status.PENDING)
-    Delivery.objects.filter(pk=d.pk).update(
-        created_at=timezone.now() - timedelta(minutes=30)
-    )
+    Delivery.objects.filter(pk=d.pk).update(created_at=timezone.now() - timedelta(minutes=30))
     d.refresh_from_db()
     d.status = Delivery.Status.DELIVERED
     d.save()
@@ -119,6 +125,13 @@ def test_deliveries_per_day_shape(admin_client):
     assert resp.status_code == 200
     assert len(resp.data) == 7
     assert sum(row["count"] for row in resp.data) == 1
+
+
+@pytest.mark.django_db
+def test_deliveries_per_day_invalid_days_falls_back_to_default(admin_client):
+    resp = admin_client.get(reverse("report-deliveries-per-day"), {"days": "no-es-un-numero"})
+    assert resp.status_code == 200
+    assert len(resp.data) == 14  # default window
 
 
 @pytest.mark.django_db

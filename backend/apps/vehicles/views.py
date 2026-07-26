@@ -1,4 +1,5 @@
 """Views for the vehicles app."""
+
 from rest_framework import viewsets
 
 from apps.users.permissions import IsAdminOrReadOnly

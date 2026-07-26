@@ -1,4 +1,5 @@
 """Serializers for the vehicles app."""
+
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
@@ -28,7 +29,5 @@ class VehicleSerializer(serializers.ModelSerializer):
     def validate_driver(self, value):
         """Only users with the DRIVER role can be assigned a vehicle."""
         if value is not None and not value.is_driver:
-            raise serializers.ValidationError(
-                "El usuario asignado debe tener el rol de conductor."
-            )
+            raise serializers.ValidationError("El usuario asignado debe tener el rol de conductor.")
         return value

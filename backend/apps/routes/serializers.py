@@ -1,4 +1,5 @@
 """Serializers for route optimization and route assignment."""
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
@@ -34,9 +35,7 @@ class OptimizeRequestSerializer(serializers.Serializer):
 
     origin = PointSerializer()
     stops = serializers.ListField(child=PointSerializer(), allow_empty=False)
-    avg_speed_kmh = serializers.FloatField(
-        required=False, default=40.0, min_value=1
-    )
+    avg_speed_kmh = serializers.FloatField(required=False, default=40.0, min_value=1)
 
 
 class LegSerializer(serializers.Serializer):
@@ -64,12 +63,8 @@ class RouteStopSerializer(serializers.ModelSerializer):
     so the frontend can render the map and the explainable stop list
     without extra requests."""
 
-    tracking_code = serializers.CharField(
-        source="delivery.package.tracking_code", read_only=True
-    )
-    client_name = serializers.CharField(
-        source="delivery.package.client_name", read_only=True
-    )
+    tracking_code = serializers.CharField(source="delivery.package.tracking_code", read_only=True)
+    client_name = serializers.CharField(source="delivery.package.client_name", read_only=True)
     destination_address = serializers.CharField(
         source="delivery.package.destination_address", read_only=True
     )
@@ -134,15 +129,9 @@ class RouteCreateSerializer(serializers.Serializer):
     Delivery is stamped with the chosen driver/vehicle.
     """
 
-    driver = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.filter(role=User.Role.DRIVER)
-    )
-    vehicle = serializers.PrimaryKeyRelatedField(
-        queryset=Vehicle.objects.filter(is_active=True)
-    )
-    delivery_ids = serializers.ListField(
-        child=serializers.IntegerField(), allow_empty=False
-    )
+    driver = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role=User.Role.DRIVER))
+    vehicle = serializers.PrimaryKeyRelatedField(queryset=Vehicle.objects.filter(is_active=True))
+    delivery_ids = serializers.ListField(child=serializers.IntegerField(), allow_empty=False)
     origin_label = serializers.CharField(required=False, allow_blank=True)
     origin_lat = serializers.FloatField(required=False)
     origin_lng = serializers.FloatField(required=False)
@@ -151,9 +140,7 @@ class RouteCreateSerializer(serializers.Serializer):
         if len(set(value)) != len(value):
             raise serializers.ValidationError("Hay entregas duplicadas en la lista.")
 
-        deliveries = list(
-            Delivery.objects.filter(id__in=value).select_related("package")
-        )
+        deliveries = list(Delivery.objects.filter(id__in=value).select_related("package"))
         if len(deliveries) != len(value):
             raise serializers.ValidationError("Alguna entrega no existe.")
 
@@ -197,16 +184,14 @@ class RouteCreateSerializer(serializers.Serializer):
             origin_lat=origin_lat,
             origin_lng=origin_lng,
             total_distance_km=result.total_distance_km,
-            estimated_time_min=round(
-                result.total_distance_km / DEFAULT_SPEED_KMH * 60, 2
-            ),
+            estimated_time_min=round(result.total_distance_km / DEFAULT_SPEED_KMH * 60, 2),
         )
 
         # result.order[0] is the origin (index 0); every later index maps
         # 1:1 back to `deliveries` (coords[k] == deliveries[k - 1]).
         for position, point_index in enumerate(result.order[1:], start=1):
             delivery = deliveries[point_index - 1]
-            leg = next(l for l in result.legs if l.to_index == point_index)
+            leg = next(candidate for candidate in result.legs if candidate.to_index == point_index)
             RouteStop.objects.create(
                 route=route,
                 delivery=delivery,

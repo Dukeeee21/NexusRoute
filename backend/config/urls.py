@@ -4,12 +4,10 @@ Root URL configuration for NexusRoute.
 All API routes are namespaced under /api/. Each app exposes its own
 urls module which is included here.
 """
+
 from django.contrib import admin
 from django.urls import include, path
-from drf_spectacular.views import (
-    SpectacularAPIView,
-    SpectacularSwaggerView,
-)
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.users.views import CustomTokenObtainPairView

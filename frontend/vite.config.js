@@ -25,4 +25,20 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Leaflet and Chart.js are only used by the admin Routes/Reports
+        // pages, not the driver view or login — splitting them out of
+        // the main bundle means those two heavy libraries only download
+        // when a page that actually needs them is visited, instead of
+        // bloating every route's initial load.
+        manualChunks: {
+          leaflet: ["leaflet"],
+          charts: ["chart.js", "react-chartjs-2"],
+          vendor: ["react", "react-dom", "react-router-dom", "react-redux", "@reduxjs/toolkit"],
+        },
+      },
+    },
+  },
 });

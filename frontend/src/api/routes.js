@@ -21,3 +21,9 @@ export async function createRoute(payload) {
   const { data } = await api.post("/routes/", payload);
   return data;
 }
+
+/** The configured depot { label, lat, lng } — default origin for deliveries. */
+export async function fetchDepot() {
+  const { data } = await api.get("/routes/depot/");
+  return data;
+}

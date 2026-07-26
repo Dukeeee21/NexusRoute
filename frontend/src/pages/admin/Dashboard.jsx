@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 import Sidebar from "../../components/common/Sidebar.jsx";
 import DeliveryStatusBadge from "../../components/deliveries/DeliveryStatusBadge.jsx";
+import MetricsCard from "../../components/reports/MetricsCard.jsx";
 import {
   IconBell,
   IconBox,
@@ -13,32 +14,60 @@ import {
 } from "../../components/common/icons.jsx";
 import { useAuth } from "../../hooks/useAuth.js";
 import { useDeliveries } from "../../hooks/useDeliveries.js";
+import { useReportSummary } from "../../hooks/useReportSummary.js";
 import { formatTime } from "../../utils/formatters.js";
 
-// Metric cards. "Entregas totales" is live (from the API count); the rest
-// become live in Phase 6 (reports module).
-function buildMetrics(total) {
+// Refresh the recent-deliveries table (and the KPI summary) on an
+// interval so the dispatcher notices when a driver marks a delivery as
+// completed, without needing a websocket server (see roadmap Phase 5:
+// "notificación al admin... vía polling").
+const POLL_MS = 15000;
+
+// All four cards now come straight from GET /api/reports/performance/
+// (Phase 6) — no more mocked values.
+function buildMetrics(summary) {
+  const s = summary ?? {};
+  const na = "—";
   return [
-    { label: "Entregas totales", value: String(total), hint: "En el sistema", hintColor: "text-status-delivered", Icon: IconBox },
-    { label: "En tránsito", value: "45", hint: "Activas", hintColor: "text-status-transit", Icon: IconTruck },
-    { label: "Entregadas", value: "1,120", hint: "98% éxito", hintColor: "text-status-delivered", Icon: IconCheck },
-    { label: "Conductores activos", value: "32", hint: "32/40 turnos cubiertos", hintColor: "text-slate-400", Icon: IconUser },
+    {
+      label: "Entregas totales",
+      value: summary ? String(s.total_deliveries) : na,
+      hint: summary ? `${s.completion_rate}% completadas` : "",
+      hintColor: "text-status-delivered",
+      Icon: IconBox,
+    },
+    {
+      label: "En tránsito",
+      value: summary ? String(s.in_transit) : na,
+      hint: "Activas",
+      hintColor: "text-status-transit",
+      Icon: IconTruck,
+    },
+    {
+      label: "Entregadas",
+      value: summary ? String(s.delivered) : na,
+      hint: summary ? `${s.completion_rate}% éxito` : "",
+      hintColor: "text-status-delivered",
+      Icon: IconCheck,
+    },
+    {
+      label: "Conductores activos",
+      value: summary ? String(s.active_drivers) : na,
+      hint: "Con entregas asignadas",
+      hintColor: "text-slate-400",
+      Icon: IconUser,
+    },
   ];
 }
 
-// Refresh the recent-deliveries table on an interval so the dispatcher
-// notices when a driver marks a delivery as completed, without needing
-// a websocket server (see roadmap Phase 5: "notificación al admin...
-// vía polling").
-const POLL_MS = 15000;
-
 export default function Dashboard() {
   const { user, logout } = useAuth();
-  const { deliveries, count, loading, error } = useDeliveries(undefined, { pollMs: POLL_MS });
+  const { deliveries, loading, error } = useDeliveries(undefined, { pollMs: POLL_MS });
+  const { summary } = useReportSummary({ pollMs: POLL_MS });
   const displayName = user?.first_name || user?.username || "Admin";
 
   const recent = deliveries.slice(0, 5);
-  const metrics = buildMetrics(count);
+  const metrics = buildMetrics(summary);
 
   return (
     <div className="flex min-h-screen bg-nexus-navy text-slate-200">
@@ -79,20 +108,8 @@ export default function Dashboard() {
 
           {/* Metrics */}
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {metrics.map(({ label, value, hint, hintColor, Icon }) => (
-              <div
-                key={label}
-                className="rounded-xl border border-nexus-border bg-nexus-surface p-5"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-400">{label}</span>
-                  <span className="text-slate-500">
-                    <Icon width={18} height={18} />
-                  </span>
-                </div>
-                <p className="mt-3 text-3xl font-bold text-white">{value}</p>
-                <p className={`mt-1 text-xs ${hintColor}`}>{hint}</p>
-              </div>
+            {metrics.map((m) => (
+              <MetricsCard key={m.label} {...m} />
             ))}
           </div>
 

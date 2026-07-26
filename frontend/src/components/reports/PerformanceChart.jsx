@@ -54,7 +54,7 @@ export default function PerformanceChart({ driverStats, dailySeries }) {
 
   const lineData = {
     labels: dailySeries.map((d) =>
-      new Date(d.date).toLocaleDateString("es-AR", { day: "2-digit", month: "short" })
+      new Date(d.date).toLocaleDateString("es-PE", { day: "2-digit", month: "short" })
     ),
     datasets: [
       {

@@ -1,11 +1,18 @@
 """Views for the users app."""
 
 from django.contrib.auth import get_user_model
-from rest_framework import generics, permissions, viewsets
+from rest_framework import generics, permissions, status, viewsets
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .permissions import IsAdmin
-from .serializers import CustomTokenObtainPairSerializer, RegisterSerializer, UserSerializer
+from .serializers import (
+    ChangePasswordSerializer,
+    CustomTokenObtainPairSerializer,
+    RegisterSerializer,
+    UserSerializer,
+)
 
 User = get_user_model()
 
@@ -32,6 +39,23 @@ class MeView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class ChangePasswordView(APIView):
+    """
+    PATCH /api/users/me/password/
+
+    Lets the authenticated user (admin or driver) change their own
+    password, given their current one. Backs the "Configuración" screen.
+    """
+
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def patch(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Contraseña actualizada."}, status=status.HTTP_200_OK)
 
 
 class UserViewSet(viewsets.ModelViewSet):

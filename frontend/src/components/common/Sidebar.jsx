@@ -81,11 +81,25 @@ export default function Sidebar({ active = "dashboard" }) {
 
       {/* Footer */}
       <div className="space-y-1 border-t border-nexus-border px-3 py-3">
-        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-400 hover:text-slate-200">
+        <button
+          onClick={() => navigate("/admin/settings")}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+            active === "settings"
+              ? "text-nexus-primary"
+              : "text-slate-400 hover:bg-nexus-surface2 hover:text-slate-200"
+          }`}
+        >
           <IconSettings width={18} height={18} />
           Configuración
         </button>
-        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-400 hover:text-slate-200">
+        <button
+          onClick={() => navigate("/admin/support")}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+            active === "support"
+              ? "text-nexus-primary"
+              : "text-slate-400 hover:bg-nexus-surface2 hover:text-slate-200"
+          }`}
+        >
           <IconHelp width={18} height={18} />
           Soporte
         </button>

@@ -70,3 +70,62 @@ def test_admin_can_register_users(api_client, admin_user):
     )
     assert resp.status_code == 201
     assert User.objects.filter(username="new").exists()
+
+
+@pytest.mark.django_db
+def test_can_update_own_profile_fields(api_client, driver_user):
+    api_client.force_authenticate(user=driver_user)
+    resp = api_client.patch(
+        reverse("user-me"),
+        {"phone": "+51 999 999 999", "email": "driver@nexusroute.local"},
+        format="json",
+    )
+    assert resp.status_code == 200
+    driver_user.refresh_from_db()
+    assert driver_user.phone == "+51 999 999 999"
+    assert driver_user.email == "driver@nexusroute.local"
+
+
+@pytest.mark.django_db
+def test_change_password_requires_authentication(api_client):
+    resp = api_client.patch(
+        reverse("user-change-password"),
+        {"current_password": "x", "new_password": "newpass123"},
+        format="json",
+    )
+    assert resp.status_code == 401
+
+
+@pytest.mark.django_db
+def test_change_password_wrong_current_rejected(api_client, driver_user):
+    api_client.force_authenticate(user=driver_user)
+    resp = api_client.patch(
+        reverse("user-change-password"),
+        {"current_password": "wrong", "new_password": "newpass123"},
+        format="json",
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+def test_change_password_too_short_rejected(api_client, driver_user):
+    api_client.force_authenticate(user=driver_user)
+    resp = api_client.patch(
+        reverse("user-change-password"),
+        {"current_password": "testpass123", "new_password": "short"},
+        format="json",
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+def test_change_password_success(api_client, driver_user):
+    api_client.force_authenticate(user=driver_user)
+    resp = api_client.patch(
+        reverse("user-change-password"),
+        {"current_password": "testpass123", "new_password": "newpass123"},
+        format="json",
+    )
+    assert resp.status_code == 200
+    driver_user.refresh_from_db()
+    assert driver_user.check_password("newpass123")

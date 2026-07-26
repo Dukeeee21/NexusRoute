@@ -39,6 +39,13 @@ const authSlice = createSlice({
       state.error = null;
       localStorage.clear();
     },
+    // Keeps the header/sidebar in sync right after editing the profile
+    // in "Configuración" — otherwise the old name would linger until
+    // the next login since `user` is only set on loginThunk.fulfilled.
+    updateUser(state, action) {
+      state.user = { ...state.user, ...action.payload };
+      localStorage.setItem("nexus_user", JSON.stringify(state.user));
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -57,5 +64,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout } = authSlice.actions;
+export const { logout, updateUser } = authSlice.actions;
 export default authSlice.reducer;

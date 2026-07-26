@@ -19,7 +19,7 @@ const NAV_ITEMS = [
   { key: "deliveries", label: "Entregas", Icon: IconBox, to: "/admin/deliveries" },
   { key: "vehicles", label: "Vehículos", Icon: IconTruck, to: "/admin/vehicles" },
   { key: "routes", label: "Rutas", Icon: IconRoute, to: "/admin/routes" },
-  { key: "reports", label: "Reportes", Icon: IconChart, to: null },
+  { key: "reports", label: "Reportes", Icon: IconChart, to: "/admin/reports" },
 ];
 
 /**

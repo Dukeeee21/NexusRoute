@@ -26,9 +26,15 @@ function buildMetrics(total) {
   ];
 }
 
+// Refresh the recent-deliveries table on an interval so the dispatcher
+// notices when a driver marks a delivery as completed, without needing
+// a websocket server (see roadmap Phase 5: "notificación al admin...
+// vía polling").
+const POLL_MS = 15000;
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
-  const { deliveries, count, loading, error } = useDeliveries();
+  const { deliveries, count, loading, error } = useDeliveries(undefined, { pollMs: POLL_MS });
   const displayName = user?.first_name || user?.username || "Admin";
 
   const recent = deliveries.slice(0, 5);
@@ -93,7 +99,16 @@ export default function Dashboard() {
           {/* Recent deliveries */}
           <div className="mt-8 rounded-xl border border-nexus-border bg-nexus-surface">
             <div className="flex items-center justify-between px-5 py-4">
-              <h2 className="text-base font-semibold text-white">Entregas Recientes</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold text-white">Entregas Recientes</h2>
+                <span
+                  className="flex items-center gap-1 text-[11px] text-slate-500"
+                  title={`Se actualiza sola cada ${POLL_MS / 1000}s`}
+                >
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-status-delivered" />
+                  en vivo
+                </span>
+              </div>
               <Link
                 to="/admin/deliveries"
                 className="text-xs font-medium text-nexus-primary hover:underline"

@@ -109,7 +109,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # ── Internationalization ──────────────────────────────────────────
 LANGUAGE_CODE = "es"
-TIME_ZONE = "America/Argentina/Buenos_Aires"
+TIME_ZONE = "America/Lima"
 USE_I18N = True
 USE_TZ = True
 
@@ -139,10 +139,11 @@ DJANGO_REDIS_IGNORE_EXCEPTIONS = True
 
 # ── Fleet defaults ────────────────────────────────────────────────
 # Default route origin (depot) used when creating a Route without an
-# explicit origin. Defaults to Buenos Aires; override per deployment.
-DEPOT_LAT = env.float("DEPOT_LAT", default=-34.6037)
-DEPOT_LNG = env.float("DEPOT_LNG", default=-58.3816)
-DEPOT_LABEL = env("DEPOT_LABEL", default="Depósito Central")
+# explicit origin. Defaults to Lima, Perú (Cercado de Lima); override
+# per deployment.
+DEPOT_LAT = env.float("DEPOT_LAT", default=-12.0464)
+DEPOT_LNG = env.float("DEPOT_LNG", default=-77.0428)
+DEPOT_LABEL = env("DEPOT_LABEL", default="Depósito Central - Lima")
 
 # ── Django REST Framework ─────────────────────────────────────────
 REST_FRAMEWORK = {
